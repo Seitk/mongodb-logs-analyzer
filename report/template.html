@@ -156,6 +156,14 @@ tr:hover { background: rgba(88, 166, 255, 0.04); }
   </div>
 </div>
 
+<!-- AI Analysis (right under Executive Summary) -->
+{{if .AIAnalysis}}
+<div class="section">
+  <h2>AI Analysis &amp; Recommendations</h2>
+  <div class="ai-content">{{.AIAnalysis}}</div>
+</div>
+{{end}}
+
 <!-- All Operations Overview -->
 <div class="section">
   <h2>Operations Overview (all {{comma .General.TotalLines}} log entries)</h2>
@@ -537,13 +545,6 @@ tr:hover { background: rgba(88, 166, 255, 0.04); }
 </div>
 {{end}}
 
-<!-- AI Analysis -->
-{{if .AIAnalysis}}
-<div class="section">
-  <h2>AI Analysis</h2>
-  <div class="ai-content">{{.AIAnalysis}}</div>
-</div>
-{{end}}
 
 <script>
 // Query detail data (shared between scatter and breakdown click handlers)
