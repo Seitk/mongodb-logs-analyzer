@@ -6,13 +6,22 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/Seitk/mongodb-logs-analyzer/internal/analyzer"
+	"github.com/Seitk/mongodb-logs-analyzer/internal/atlas"
 	"github.com/Seitk/mongodb-logs-analyzer/internal/report"
 )
 
 func main() {
-	// Define flags
+	if len(os.Args) > 1 && os.Args[1] == "download" {
+		runDownload(os.Args[2:])
+		return
+	}
+	runAnalyze()
+}
+
+func runAnalyze() {
 	format := flag.String("format", "html", "Output format: html or json")
 	output := flag.String("o", "", "Output file path (default: <logname>_report.<format>)")
 	outputLong := flag.String("output", "", "Output file path (default: <logname>_report.<format>)")
@@ -22,13 +31,12 @@ func main() {
 	slowMS := flag.Int("slow", 100, "Slow query threshold in milliseconds")
 
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: mla [flags] <logfile>\n\nAnalyze MongoDB log files and generate reports.\n\nFlags:\n")
+		fmt.Fprintf(os.Stderr, "Usage: mla [flags] <logfile>\n       mla download [flags]\n\nAnalyze MongoDB log files and generate reports.\n\nFlags:\n")
 		flag.PrintDefaults()
 	}
 
 	flag.Parse()
 
-	// Validate positional argument
 	if flag.NArg() < 1 {
 		fmt.Fprintf(os.Stderr, "Error: log file path is required\n\n")
 		flag.Usage()
@@ -36,26 +44,22 @@ func main() {
 	}
 	logFile := flag.Arg(0)
 
-	// Resolve output flag (short or long form)
 	outPath := *output
 	if outPath == "" {
 		outPath = *outputLong
 	}
 
-	// Validate format
 	*format = strings.ToLower(*format)
 	if *format != "html" && *format != "json" {
 		fmt.Fprintf(os.Stderr, "Error: invalid format %q, must be html or json\n", *format)
 		os.Exit(1)
 	}
 
-	// Validate log file exists
 	if _, err := os.Stat(logFile); os.IsNotExist(err) {
 		fmt.Fprintf(os.Stderr, "Error: log file not found: %s\n", logFile)
 		os.Exit(1)
 	}
 
-	// Run analysis
 	fmt.Fprintf(os.Stderr, "Analyzing %s (slow threshold: %dms)...\n", logFile, *slowMS)
 
 	a := analyzer.New(*slowMS)
@@ -67,11 +71,9 @@ func main() {
 
 	fmt.Fprintf(os.Stderr, "Analysis complete: %d lines processed\n", results.General.TotalLines)
 
-	// Generate output
 	switch *format {
 	case "json":
 		if outPath == "" {
-			// Write to stdout
 			if err := report.WriteJSON(os.Stdout, results); err != nil {
 				fmt.Fprintf(os.Stderr, "Error: failed to write JSON: %v\n", err)
 				os.Exit(1)
@@ -91,20 +93,17 @@ func main() {
 		}
 
 	case "html":
-		// Optionally run AI analysis
 		var aiAnalysis string
 		if *aiFlag {
 			fmt.Fprintf(os.Stderr, "Running AI analysis...\n")
 			aiAnalysis, err = report.RunAISynthesis(results, *aiCmd, *repoPath)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Warning: AI analysis failed: %v\n", err)
-				// Continue without AI analysis
 			} else {
 				fmt.Fprintf(os.Stderr, "AI analysis complete\n")
 			}
 		}
 
-		// Default output filename
 		if outPath == "" {
 			base := filepath.Base(logFile)
 			ext := filepath.Ext(base)
@@ -125,4 +124,154 @@ func main() {
 		}
 		fmt.Fprintf(os.Stderr, "HTML report written to %s\n", outPath)
 	}
+}
+
+func runDownload(args []string) {
+	fs := flag.NewFlagSet("download", flag.ExitOnError)
+	projectID := fs.String("project", "", "Atlas project/group ID")
+	hostname := fs.String("host", "", "Hostname to download logs from")
+	logName := fs.String("log", "mongodb", "Log name: mongodb, mongos, mongodb-audit-log, mongos-audit-log")
+	outDir := fs.String("o", ".", "Output directory for downloaded logs")
+	startStr := fs.String("start", "", "Start time (ISO 8601, default: 24h ago)")
+	endStr := fs.String("end", "", "End time (ISO 8601, default: now)")
+	apiKey := fs.String("api-key", "", "Atlas public API key (or set ATLAS_PUBLIC_KEY)")
+	apiSecret := fs.String("api-secret", "", "Atlas private API key (or set ATLAS_PRIVATE_KEY)")
+	listProjects := fs.Bool("list-projects", false, "List available Atlas projects")
+	listHosts := fs.Bool("list-hosts", false, "List hosts in a project")
+
+	fs.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage: mla download [flags]\n\nDownload MongoDB logs from Atlas.\n\nFlags:\n")
+		fs.PrintDefaults()
+		fmt.Fprintf(os.Stderr, "\nExamples:\n")
+		fmt.Fprintf(os.Stderr, "  mla download -list-projects\n")
+		fmt.Fprintf(os.Stderr, "  mla download -project <id> -list-hosts\n")
+		fmt.Fprintf(os.Stderr, "  mla download -project <id> -host <hostname> -o logs/\n")
+	}
+
+	fs.Parse(args)
+
+	pubKey := *apiKey
+	if pubKey == "" {
+		pubKey = os.Getenv("ATLAS_PUBLIC_KEY")
+	}
+	privKey := *apiSecret
+	if privKey == "" {
+		privKey = os.Getenv("ATLAS_PRIVATE_KEY")
+	}
+
+	if pubKey == "" || privKey == "" {
+		fmt.Fprintf(os.Stderr, "Error: Atlas API credentials required.\n")
+		fmt.Fprintf(os.Stderr, "Set ATLAS_PUBLIC_KEY and ATLAS_PRIVATE_KEY environment variables,\n")
+		fmt.Fprintf(os.Stderr, "or use -api-key and -api-secret flags.\n")
+		os.Exit(1)
+	}
+
+	client := atlas.NewClient(pubKey, privKey)
+
+	if *listProjects {
+		projects, err := client.ListProjects()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Fprintf(os.Stderr, "Found %d projects:\n", len(projects))
+		for _, p := range projects {
+			fmt.Printf("  %-28s %s\n", p.ID, p.Name)
+		}
+		return
+	}
+
+	if *listHosts {
+		if *projectID == "" {
+			fmt.Fprintf(os.Stderr, "Error: -project is required with -list-hosts\n")
+			os.Exit(1)
+		}
+		procs, err := client.ListProcesses(*projectID)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Fprintf(os.Stderr, "Found %d hosts:\n", len(procs))
+		for _, p := range procs {
+			fmt.Printf("  %-50s %-6d %s\n", p.Hostname, p.Port, p.TypeName)
+		}
+		return
+	}
+
+	// Download logs
+	if *projectID == "" || *hostname == "" {
+		fmt.Fprintf(os.Stderr, "Error: -project and -host are required for log download\n\n")
+		fs.Usage()
+		os.Exit(1)
+	}
+
+	now := time.Now().UTC()
+	start := now.Add(-24 * time.Hour)
+	end := now
+
+	if *startStr != "" {
+		t, err := time.Parse(time.RFC3339, *startStr)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: invalid -start time: %v\n", err)
+			os.Exit(1)
+		}
+		start = t
+	}
+	if *endStr != "" {
+		t, err := time.Parse(time.RFC3339, *endStr)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: invalid -end time: %v\n", err)
+			os.Exit(1)
+		}
+		end = t
+	}
+
+	if err := os.MkdirAll(*outDir, 0755); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: create output directory: %v\n", err)
+		os.Exit(1)
+	}
+
+	outFile := filepath.Join(*outDir, fmt.Sprintf("%s_%s_%s_%s.log",
+		sanitizeFilename(*hostname),
+		start.Format("2006-01-02T15-04-05"),
+		end.Format("2006-01-02T15-04-05"),
+		strings.ToUpper(*logName),
+	))
+
+	fmt.Fprintf(os.Stderr, "Downloading %s logs from %s...\n", *logName, *hostname)
+	fmt.Fprintf(os.Stderr, "  Time range: %s to %s\n", start.Format(time.RFC3339), end.Format(time.RFC3339))
+
+	f, err := os.Create(outFile)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: create output file: %v\n", err)
+		os.Exit(1)
+	}
+	defer f.Close()
+
+	if err := client.DownloadLog(*projectID, *hostname, *logName, start, end, f); err != nil {
+		os.Remove(outFile)
+		fmt.Fprintf(os.Stderr, "Error: download failed: %v\n", err)
+		os.Exit(1)
+	}
+
+	info, _ := f.Stat()
+	fmt.Fprintf(os.Stderr, "Downloaded to %s (%s)\n", outFile, formatSize(info.Size()))
+}
+
+func sanitizeFilename(s string) string {
+	r := strings.NewReplacer(":", "_", "/", "_", "\\", "_")
+	return r.Replace(s)
+}
+
+func formatSize(bytes int64) string {
+	const unit = 1024
+	if bytes < unit {
+		return fmt.Sprintf("%d B", bytes)
+	}
+	div, exp := int64(unit), 0
+	for n := bytes / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %s", float64(bytes)/float64(div), []string{"KB", "MB", "GB"}[exp])
 }

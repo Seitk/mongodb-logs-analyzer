@@ -102,6 +102,57 @@ mla -o report.html mongod.log
 | `-ai-cmd` | `claude -p` | AI command (must read stdin, write stdout) |
 | `-repo` | | Application repo path for code correlation |
 
+## Download Logs from Atlas
+
+Pull logs directly from MongoDB Atlas using the Administration API.
+
+### Setup
+
+Create an API key in your Atlas organization with Project Read Only access (minimum). Then:
+
+```bash
+export ATLAS_PUBLIC_KEY=your-public-key
+export ATLAS_PRIVATE_KEY=your-private-key
+```
+
+### Commands
+
+```bash
+# List all projects
+mla download -list-projects
+
+# List hosts in a project
+mla download -project <projectId> -list-hosts
+
+# Download last 24h of logs (default)
+mla download -project <projectId> -host <hostname> -o logs/
+
+# Custom time range
+mla download -project <projectId> -host <hostname> \
+  -start 2024-01-15T00:00:00Z -end 2024-01-15T12:00:00Z -o logs/
+
+# Download mongos logs instead of mongod
+mla download -project <projectId> -host <hostname> -log mongos -o logs/
+
+# Then analyze
+mla logs/*.log
+```
+
+### Download Flags
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `-project` | | Atlas project/group ID (required) |
+| `-host` | | Hostname to download from (required) |
+| `-log` | `mongodb` | Log type: `mongodb`, `mongos`, `mongodb-audit-log`, `mongos-audit-log` |
+| `-o` | `.` | Output directory |
+| `-start` | 24h ago | Start time (ISO 8601) |
+| `-end` | now | End time (ISO 8601) |
+| `-api-key` | `$ATLAS_PUBLIC_KEY` | Atlas public API key |
+| `-api-secret` | `$ATLAS_PRIVATE_KEY` | Atlas private API key |
+| `-list-projects` | | List available projects |
+| `-list-hosts` | | List hosts in a project |
+
 ## AI Integration
 
 When `-ai` is passed, mla:
@@ -136,7 +187,8 @@ mongodb-logs-analyzer/
 ├── internal/
 │   ├── parser/                  # Log line parsing, streaming scanner, query shape extraction
 │   ├── analyzer/                # 10 analysis accumulators + orchestrator
-│   └── report/                  # HTML (Plotly.js), JSON, and AI output
+│   ├── report/                  # HTML (Plotly.js), JSON, and AI output
+│   └── atlas/                   # Atlas Admin API client (Digest auth, log download)
 ├── Makefile                     # build, test, lint, clean, build-all
 ├── Dockerfile                   # Multi-stage Alpine build
 └── go.mod                       # Zero external dependencies

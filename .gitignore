@@ -7,4 +7,5 @@ docs/
 
 # Log files and reports
 *.log
+logs/
 *_report.html

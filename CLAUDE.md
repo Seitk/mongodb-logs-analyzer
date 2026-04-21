@@ -17,11 +17,12 @@ make clean       # Remove artifacts
 ## Project Structure
 
 ```
-cmd/mla/main.go              # CLI entry point, flag parsing
+cmd/mla/main.go              # CLI entry point, flag parsing, subcommand dispatch
 internal/
   parser/                     # LogEntry struct, streaming scanner, query shape extraction (json2pattern)
   analyzer/                   # 10 accumulators + orchestrator (single-pass, no goroutines)
   report/                     # HTML (Plotly.js embedded), JSON output, AI synthesis
+  atlas/                      # Atlas Admin API client (Digest auth, list projects/hosts, download logs)
 ```
 
 ## Key Conventions
@@ -44,9 +45,15 @@ internal/
 ## Running
 
 ```bash
+# Analyze
 ./mla logfile.log                    # HTML report
 ./mla -format json logfile.log       # JSON to stdout
 ./mla -ai logfile.log                # With AI analysis
 ./mla -ai -repo ./app logfile.log    # AI + code context
 ./mla -slow 200 logfile.log          # Custom threshold
+
+# Download from Atlas (requires ATLAS_PUBLIC_KEY + ATLAS_PRIVATE_KEY env vars)
+./mla download -list-projects
+./mla download -project <id> -list-hosts
+./mla download -project <id> -host <hostname> -o logs/
 ```
