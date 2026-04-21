@@ -102,6 +102,8 @@ tr:hover { background: rgba(88, 166, 255, 0.04); }
 .modal-stat-value { font-size: 1.3em; font-weight: 600; }
 .modal-stat-label { font-size: 0.8em; color: var(--text-muted); }
 .modal-code { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.85em; line-height: 1.5; overflow-x: auto; white-space: pre-wrap; word-break: break-all; color: var(--text); max-height: 40vh; }
+.clickable-row { cursor: pointer; }
+.clickable-row:hover { background: rgba(88,166,255,0.08); }
 </style>
 </head>
 <body>
@@ -158,6 +160,7 @@ tr:hover { background: rgba(88, 166, 255, 0.04); }
 {{if .SlowQueries.Timeline}}
 <div class="section">
   <h2>Operations Timeline</h2>
+  <p style="color:var(--text-muted);font-size:0.85em;margin-bottom:8px;">Click a bar to zoom all charts to that time window. Drag to select a range.</p>
   <div id="timeline-chart" class="chart-container"></div>
 </div>
 {{end}}
@@ -166,6 +169,7 @@ tr:hover { background: rgba(88, 166, 255, 0.04); }
 {{if .SlowQueries.Groups}}
 <div class="section">
   <h2>Slow Query Analysis ({{comma .SlowQueryCount}} queries in {{len .SlowQueries.Groups}} patterns)</h2>
+  <p style="color:var(--text-muted);font-size:0.85em;margin-bottom:8px;">Click any row to see the full query example.</p>
   <div class="table-wrap">
     <table id="slow-query-table">
       <thead>
@@ -181,19 +185,18 @@ tr:hover { background: rgba(88, 166, 255, 0.04); }
         </tr>
       </thead>
       <tbody>
-        {{range .SlowQueries.Groups}}
-        <tr>
-          <td>{{.Namespace}}</td>
-          <td>{{.CmdName}}{{if .AllowDiskUse}} <span class="tag tag-warn">disk</span>{{end}}</td>
-          <td>{{comma .Count}}</td>
-          <td>{{comma .MeanMs}}</td>
-          <td>{{comma .P95Ms}}</td>
-          <td>{{comma .MaxMs}}</td>
-          <td>{{comma .SumMs}}</td>
+        {{range $i, $g := .SlowQueries.Groups}}
+        <tr class="clickable-row" data-detail-idx="{{$i}}" onclick="showQueryModalByIdx({{$i}})">
+          <td>{{$g.Namespace}}</td>
+          <td>{{$g.CmdName}}{{if $g.AllowDiskUse}} <span class="tag tag-warn">disk</span>{{end}}</td>
+          <td>{{comma $g.Count}}</td>
+          <td>{{comma $g.MeanMs}}</td>
+          <td>{{comma $g.P95Ms}}</td>
+          <td>{{comma $g.MaxMs}}</td>
+          <td>{{comma $g.SumMs}}</td>
           <td>
-            {{if .Pattern}}
-            <span class="expandable" onclick="toggleRow(this)">{{truncate .Pattern 60}}</span>
-            <div class="expand-content">{{.Pattern}}</div>
+            {{if $g.Pattern}}
+            <code>{{truncate $g.Pattern 60}}</code>
             {{end}}
           </td>
         </tr>
@@ -232,6 +235,7 @@ tr:hover { background: rgba(88, 166, 255, 0.04); }
 {{if .SlowQueries.Groups}}
 <div class="section">
   <h2>Duration Breakdown (top patterns)</h2>
+  <p style="color:var(--text-muted);font-size:0.85em;margin-bottom:8px;">Click any bar to see the full query example.</p>
   <div id="breakdown-chart" class="chart-container"></div>
 </div>
 {{end}}
@@ -497,6 +501,9 @@ tr:hover { background: rgba(88, 166, 255, 0.04); }
 {{end}}
 
 <script>
+// Query detail data (shared between scatter and breakdown click handlers)
+var scatterDetails = {{.ScatterDetailsJSON}};
+
 // Theme toggle
 function toggleTheme() {
   var html = document.documentElement;
@@ -577,6 +584,18 @@ if (timelineEl) {
     bargap: 0.1
   });
   Plotly.newPlot('timeline-chart', timelineData, timelineLayout, plotConfig);
+
+  // Click a timeline bar to zoom all charts to ±5 min around that point
+  timelineEl.on('plotly_click', function(data) {
+    if (!data.points || data.points.length === 0) return;
+    var clickedTime = new Date(data.points[0].x);
+    var lo = new Date(clickedTime.getTime() - 5 * 60000).toISOString();
+    var hi = new Date(clickedTime.getTime() + 5 * 60000).toISOString();
+    var zoomRange = {'xaxis.range': [lo, hi]};
+    Plotly.relayout('timeline-chart', zoomRange);
+    if (document.getElementById('scatter-chart')) Plotly.relayout('scatter-chart', zoomRange);
+    if (document.getElementById('conn-chart')) Plotly.relayout('conn-chart', zoomRange);
+  });
 }
 
 // Scatter chart
@@ -590,8 +609,7 @@ if (scatterEl) {
   });
   Plotly.newPlot('scatter-chart', scatterData, scatterLayout, plotConfig);
 
-  // Click handler for query detail modal
-  var scatterDetails = {{.ScatterDetailsJSON}};
+  // Click handler for query detail modal (scatterDetails declared at top scope for reuse by breakdown chart)
   scatterEl.on('plotly_click', function(data) {
     if (!data.points || data.points.length === 0) return;
     var idx = data.points[0].pointIndex;
@@ -599,6 +617,12 @@ if (scatterEl) {
       showQueryModal(scatterDetails[idx]);
     }
   });
+}
+
+function showQueryModalByIdx(idx) {
+  if (typeof scatterDetails !== 'undefined' && idx >= 0 && idx < scatterDetails.length) {
+    showQueryModal(scatterDetails[idx]);
+  }
 }
 
 function showQueryModal(detail) {
@@ -653,6 +677,15 @@ if (breakdownEl) {
     margin: { l: 200, r: 30, t: 30, b: 50 }
   });
   Plotly.newPlot('breakdown-chart', breakdownData, breakdownLayout, plotConfig);
+
+  // Click handler — reuse scatterDetails (same group order, capped at 15)
+  breakdownEl.on('plotly_click', function(data) {
+    if (!data.points || data.points.length === 0) return;
+    var idx = data.points[0].customdata;
+    if (typeof idx === 'number' && idx >= 0 && typeof scatterDetails !== 'undefined' && idx < scatterDetails.length) {
+      showQueryModal(scatterDetails[idx]);
+    }
+  });
 }
 
 // Connection timeline chart

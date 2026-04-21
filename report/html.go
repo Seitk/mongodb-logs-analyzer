@@ -223,6 +223,7 @@ func buildBreakdownJSON(results analyzer.Results) string {
 	groups = groups[:limit]
 
 	labels := make([]string, limit)
+	indices := make([]int, limit)
 	cpuMs := make([]float64, limit)
 	writeConcernMs := make([]float64, limit)
 	storageMs := make([]float64, limit)
@@ -237,6 +238,7 @@ func buildBreakdownJSON(results analyzer.Results) string {
 			label = label[:37] + "..."
 		}
 		labels[i] = label
+		indices[i] = i
 
 		cpu := float64(grp.MeanCPUNanos) / 1e6
 		wc := float64(grp.MeanWriteConcernMs)
@@ -259,6 +261,7 @@ func buildBreakdownJSON(results analyzer.Results) string {
 		map[string]interface{}{
 			"y":           labels,
 			"x":           cpuMs,
+			"customdata":  indices,
 			"name":        "CPU",
 			"type":        "bar",
 			"orientation": "h",
@@ -267,6 +270,7 @@ func buildBreakdownJSON(results analyzer.Results) string {
 		map[string]interface{}{
 			"y":           labels,
 			"x":           writeConcernMs,
+			"customdata":  indices,
 			"name":        "Write Concern",
 			"type":        "bar",
 			"orientation": "h",
@@ -275,6 +279,7 @@ func buildBreakdownJSON(results analyzer.Results) string {
 		map[string]interface{}{
 			"y":           labels,
 			"x":           storageMs,
+			"customdata":  indices,
 			"name":        "Storage Wait",
 			"type":        "bar",
 			"orientation": "h",
@@ -283,6 +288,7 @@ func buildBreakdownJSON(results analyzer.Results) string {
 		map[string]interface{}{
 			"y":           labels,
 			"x":           otherMs,
+			"customdata":  indices,
 			"name":        "Other",
 			"type":        "bar",
 			"orientation": "h",
