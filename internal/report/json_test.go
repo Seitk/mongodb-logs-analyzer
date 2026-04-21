@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Seitk/mongodb-logs-analyzer/analyzer"
+	"github.com/Seitk/mongodb-logs-analyzer/internal/analyzer"
 )
 
 func TestWriteJSON_ValidOutput(t *testing.T) {

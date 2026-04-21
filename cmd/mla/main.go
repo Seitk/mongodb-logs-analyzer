@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/Seitk/mongodb-logs-analyzer/analyzer"
-	"github.com/Seitk/mongodb-logs-analyzer/report"
+	"github.com/Seitk/mongodb-logs-analyzer/internal/analyzer"
+	"github.com/Seitk/mongodb-logs-analyzer/internal/report"
 )
 
 func main() {

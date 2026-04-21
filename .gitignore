@@ -1,3 +1,7 @@
-*.log
+# Build output
 mla
+dist/
+
+# Log files and reports
+*.log
 *_report.html

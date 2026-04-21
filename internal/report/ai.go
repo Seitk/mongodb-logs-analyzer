@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/Seitk/mongodb-logs-analyzer/analyzer"
+	"github.com/Seitk/mongodb-logs-analyzer/internal/analyzer"
 )
 
 // RunAISynthesis generates an AI analysis of the results by piping a prompt

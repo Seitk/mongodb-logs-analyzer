@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/Seitk/mongodb-logs-analyzer/parser"
+	"github.com/Seitk/mongodb-logs-analyzer/internal/parser"
 )
 
 // ClientGroup holds stats for a driver/version/app group.

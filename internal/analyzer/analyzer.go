@@ -1,6 +1,6 @@
 package analyzer
 
-import "github.com/Seitk/mongodb-logs-analyzer/parser"
+import "github.com/Seitk/mongodb-logs-analyzer/internal/parser"
 
 // Accumulator is the interface that all log accumulators implement.
 type Accumulator interface {

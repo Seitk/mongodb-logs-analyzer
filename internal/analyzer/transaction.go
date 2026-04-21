@@ -3,7 +3,7 @@ package analyzer
 import (
 	"time"
 
-	"github.com/Seitk/mongodb-logs-analyzer/parser"
+	"github.com/Seitk/mongodb-logs-analyzer/internal/parser"
 )
 
 // TransactionEntry represents a detected transaction.

@@ -5,7 +5,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/Seitk/mongodb-logs-analyzer/parser"
+	"github.com/Seitk/mongodb-logs-analyzer/internal/parser"
 )
 
 // ErrorGroup holds stats for a group of similar errors/warnings.

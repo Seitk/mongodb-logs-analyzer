@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Seitk/mongodb-logs-analyzer/parser"
+	"github.com/Seitk/mongodb-logs-analyzer/internal/parser"
 )
 
 // IPStats holds connection stats for a single IP address.

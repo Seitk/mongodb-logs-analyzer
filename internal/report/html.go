@@ -9,7 +9,7 @@ import (
 	"math"
 	"sort"
 
-	"github.com/Seitk/mongodb-logs-analyzer/analyzer"
+	"github.com/Seitk/mongodb-logs-analyzer/internal/analyzer"
 )
 
 //go:embed template.html

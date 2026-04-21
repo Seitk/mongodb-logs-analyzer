@@ -5,7 +5,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/Seitk/mongodb-logs-analyzer/parser"
+	"github.com/Seitk/mongodb-logs-analyzer/internal/parser"
 )
 
 // percentile computes the p-th percentile from a sorted slice of ints.
