@@ -2,6 +2,9 @@
 mla
 dist/
 
+# Internal docs
+docs/
+
 # Log files and reports
 *.log
 *_report.html
