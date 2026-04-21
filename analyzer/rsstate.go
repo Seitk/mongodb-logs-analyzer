@@ -4,7 +4,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/anthropics/mla/parser"
+	"github.com/Seitk/mongodb-logs-analyzer/parser"
 )
 
 // RSStateEvent represents a replica set state change event.

@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/anthropics/mla/parser"
+	"github.com/Seitk/mongodb-logs-analyzer/parser"
 )
 
 // makeEntry is a test helper for building LogEntry values.

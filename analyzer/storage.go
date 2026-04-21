@@ -3,7 +3,7 @@ package analyzer
 import (
 	"sort"
 
-	"github.com/anthropics/mla/parser"
+	"github.com/Seitk/mongodb-logs-analyzer/parser"
 )
 
 // StorageNamespace holds per-namespace storage I/O stats.

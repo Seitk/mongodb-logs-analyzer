@@ -4,7 +4,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/anthropics/mla/parser"
+	"github.com/Seitk/mongodb-logs-analyzer/parser"
 )
 
 // MessageCount holds a message string and its occurrence count.

@@ -9,7 +9,7 @@ import (
 	"math"
 	"sort"
 
-	"github.com/anthropics/mla/analyzer"
+	"github.com/Seitk/mongodb-logs-analyzer/analyzer"
 )
 
 //go:embed template.html

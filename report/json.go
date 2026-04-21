@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"io"
 
-	"github.com/anthropics/mla/analyzer"
+	"github.com/Seitk/mongodb-logs-analyzer/analyzer"
 )
 
 // jsonOutput defines the top-level JSON structure for serialization.

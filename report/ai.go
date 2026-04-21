@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/anthropics/mla/analyzer"
+	"github.com/Seitk/mongodb-logs-analyzer/analyzer"
 )
 
 // RunAISynthesis generates an AI analysis of the results by piping a prompt

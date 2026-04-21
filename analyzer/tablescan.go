@@ -4,7 +4,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/anthropics/mla/parser"
+	"github.com/Seitk/mongodb-logs-analyzer/parser"
 )
 
 // TableScanEntry represents a detected table scan / collection scan.

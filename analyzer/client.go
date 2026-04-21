@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/anthropics/mla/parser"
+	"github.com/Seitk/mongodb-logs-analyzer/parser"
 )
 
 // ClientGroup holds stats for a driver/version/app group.

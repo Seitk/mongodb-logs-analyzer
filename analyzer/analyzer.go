@@ -1,6 +1,6 @@
 package analyzer
 
-import "github.com/anthropics/mla/parser"
+import "github.com/Seitk/mongodb-logs-analyzer/parser"
 
 // Accumulator is the interface that all log accumulators implement.
 type Accumulator interface {

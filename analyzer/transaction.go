@@ -3,7 +3,7 @@ package analyzer
 import (
 	"time"
 
-	"github.com/anthropics/mla/parser"
+	"github.com/Seitk/mongodb-logs-analyzer/parser"
 )
 
 // TransactionEntry represents a detected transaction.

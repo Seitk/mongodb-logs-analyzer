@@ -85,7 +85,7 @@ mongodb-logs-analyzer/
 
 ```bash
 cd /Users/philip/Development/mongodb-logs-analyzer
-go mod init github.com/anthropics/mla
+go mod init github.com/Seitk/mongodb-logs-analyzer
 ```
 
 - [ ] **Step 2: Write failing test for LogEntry parsing**
@@ -859,7 +859,7 @@ Create `analyzer/analyzer.go`:
 package analyzer
 
 import (
-	"github.com/anthropics/mla/parser"
+	"github.com/Seitk/mongodb-logs-analyzer/parser"
 )
 
 type Accumulator interface {
@@ -982,7 +982,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/anthropics/mla/parser"
+	"github.com/Seitk/mongodb-logs-analyzer/parser"
 )
 
 func makeEntry(ts string, severity, component string, id int, msg string) parser.LogEntry {
@@ -1071,7 +1071,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/anthropics/mla/parser"
+	"github.com/Seitk/mongodb-logs-analyzer/parser"
 )
 
 type MessageCount struct {
@@ -1214,7 +1214,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/anthropics/mla/parser"
+	"github.com/Seitk/mongodb-logs-analyzer/parser"
 )
 
 func makeSlowQueryEntry(ns string, durationMs float64, cmdName string, filter map[string]interface{}, cpuNanos, writeConcernMs, storageWaitUs, queueUs float64) parser.LogEntry {
@@ -1357,7 +1357,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/anthropics/mla/parser"
+	"github.com/Seitk/mongodb-logs-analyzer/parser"
 )
 
 type SlowQueryGroup struct {
@@ -1553,7 +1553,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/anthropics/mla/parser"
+	"github.com/Seitk/mongodb-logs-analyzer/parser"
 )
 
 func makeSlowQueryWithPlan(ns string, planSummary string, docsExamined, nreturned, durationMs int) parser.LogEntry {
@@ -1629,7 +1629,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/anthropics/mla/parser"
+	"github.com/Seitk/mongodb-logs-analyzer/parser"
 )
 
 type TableScan struct {
@@ -1721,7 +1721,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/anthropics/mla/parser"
+	"github.com/Seitk/mongodb-logs-analyzer/parser"
 )
 
 func makeConnEntry(id int, msg string, ts string, remote string, connID float64, connCount float64) parser.LogEntry {
@@ -1819,7 +1819,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/anthropics/mla/parser"
+	"github.com/Seitk/mongodb-logs-analyzer/parser"
 )
 
 type IPStats struct {
@@ -2014,7 +2014,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/anthropics/mla/parser"
+	"github.com/Seitk/mongodb-logs-analyzer/parser"
 )
 
 func makeClientMetadataEntry(remote, driverName, driverVersion, appName string) parser.LogEntry {
@@ -2062,7 +2062,7 @@ package analyzer
 import (
 	"sort"
 
-	"github.com/anthropics/mla/parser"
+	"github.com/Seitk/mongodb-logs-analyzer/parser"
 )
 
 type ClientGroup struct {
@@ -2199,7 +2199,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/anthropics/mla/parser"
+	"github.com/Seitk/mongodb-logs-analyzer/parser"
 )
 
 type DistinctPattern struct {
@@ -2304,7 +2304,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/anthropics/mla/parser"
+	"github.com/Seitk/mongodb-logs-analyzer/parser"
 )
 
 type RSTransition struct {
@@ -2363,7 +2363,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/anthropics/mla/parser"
+	"github.com/Seitk/mongodb-logs-analyzer/parser"
 )
 
 func makeStorageEntry(ns string, bytesRead, bytesWritten, timeReadUs, timeWriteUs float64) parser.LogEntry {
@@ -2406,7 +2406,7 @@ package analyzer
 import (
 	"sort"
 
-	"github.com/anthropics/mla/parser"
+	"github.com/Seitk/mongodb-logs-analyzer/parser"
 )
 
 type NamespaceStorage struct {
@@ -2502,7 +2502,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/anthropics/mla/parser"
+	"github.com/Seitk/mongodb-logs-analyzer/parser"
 )
 
 func TestTransactionAccumulator_DetectsTxn(t *testing.T) {
@@ -2563,7 +2563,7 @@ package analyzer
 import (
 	"time"
 
-	"github.com/anthropics/mla/parser"
+	"github.com/Seitk/mongodb-logs-analyzer/parser"
 )
 
 type TransactionEvent struct {
@@ -2682,7 +2682,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/anthropics/mla/parser"
+	"github.com/Seitk/mongodb-logs-analyzer/parser"
 )
 
 type ErrorGroup struct {
@@ -2779,7 +2779,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/anthropics/mla/analyzer"
+	"github.com/Seitk/mongodb-logs-analyzer/analyzer"
 )
 
 func TestWriteJSON_ValidOutput(t *testing.T) {
@@ -2830,7 +2830,7 @@ import (
 	"encoding/json"
 	"io"
 
-	"github.com/anthropics/mla/analyzer"
+	"github.com/Seitk/mongodb-logs-analyzer/analyzer"
 )
 
 type jsonOutput struct {
@@ -2898,7 +2898,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/anthropics/mla/analyzer"
+	"github.com/Seitk/mongodb-logs-analyzer/analyzer"
 )
 
 func TestWriteHTML_ContainsAllSections(t *testing.T) {
@@ -3283,7 +3283,7 @@ import (
 	"io"
 	"time"
 
-	"github.com/anthropics/mla/analyzer"
+	"github.com/Seitk/mongodb-logs-analyzer/analyzer"
 )
 
 //go:embed template.html
@@ -3524,7 +3524,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/anthropics/mla/analyzer"
+	"github.com/Seitk/mongodb-logs-analyzer/analyzer"
 )
 
 func RunAISynthesis(results analyzer.Results, aiCmd string, repoPath string) (string, error) {
@@ -3664,8 +3664,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/anthropics/mla/analyzer"
-	"github.com/anthropics/mla/report"
+	"github.com/Seitk/mongodb-logs-analyzer/analyzer"
+	"github.com/Seitk/mongodb-logs-analyzer/report"
 )
 
 func main() {
@@ -3805,8 +3805,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/anthropics/mla/analyzer"
-	"github.com/anthropics/mla/report"
+	"github.com/Seitk/mongodb-logs-analyzer/analyzer"
+	"github.com/Seitk/mongodb-logs-analyzer/report"
 )
 
 const realLogFile = "sample-shard-00-02_2026-04-18T12_37_07_2026-04-18T16_37_07_MONGODB.log"
