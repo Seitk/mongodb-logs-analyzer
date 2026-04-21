@@ -10,7 +10,7 @@
 
 **Spec:** `docs/superpowers/specs/2026-04-21-mongodb-log-analyzer-design.md`
 
-**Verification targets from the real log file** (`gn-shop-prod-shard-00-02.pumxn.mongodb.net_2026-04-18T12_37_07_2026-04-18T16_37_07_MONGODB.log`, 348MB):
+**Verification targets from the real log file** (`sample-shard-00-02_2026-04-18T12_37_07_2026-04-18T16_37_07_MONGODB.log`, 348MB):
 - Total lines: 956,777
 - Slow queries (id=51803): 239
 - Connection accepted (id=22943): 155,318
@@ -582,7 +582,7 @@ func TestExtractPattern_Update(t *testing.T) {
 
 func TestExtractPattern_Insert(t *testing.T) {
 	cmd := map[string]interface{}{
-		"insert": "redeems",
+		"insert": "events",
 		"documents": []interface{}{
 			map[string]interface{}{"_id": "abc", "name": "test"},
 		},
@@ -598,7 +598,7 @@ func TestExtractPattern_Insert(t *testing.T) {
 
 func TestExtractPattern_Aggregate(t *testing.T) {
 	cmd := map[string]interface{}{
-		"aggregate": "customersubscriptions",
+		"aggregate": "subscriptions",
 		"pipeline": []interface{}{
 			map[string]interface{}{
 				"$match": map[string]interface{}{
@@ -3809,7 +3809,7 @@ import (
 	"github.com/anthropics/mla/report"
 )
 
-const realLogFile = "gn-shop-prod-shard-00-02.pumxn.mongodb.net_2026-04-18T12_37_07_2026-04-18T16_37_07_MONGODB.log"
+const realLogFile = "sample-shard-00-02_2026-04-18T12_37_07_2026-04-18T16_37_07_MONGODB.log"
 
 func TestIntegration_RealLogFile(t *testing.T) {
 	if _, err := os.Stat(realLogFile); os.IsNotExist(err) {
@@ -3900,7 +3900,7 @@ Expected: completes in under 10 seconds.
 - [ ] **Step 4: Run the full tool and open the report**
 
 ```bash
-cd /Users/philip/Development/mongodb-logs-analyzer && ./mla "gn-shop-prod-shard-00-02.pumxn.mongodb.net_2026-04-18T12_37_07_2026-04-18T16_37_07_MONGODB.log" && open "gn-shop-prod-shard-00-02.pumxn.mongodb.net_2026-04-18T12_37_07_2026-04-18T16_37_07_MONGODB_report.html"
+cd /Users/philip/Development/mongodb-logs-analyzer && ./mla "sample-shard-00-02_2026-04-18T12_37_07_2026-04-18T16_37_07_MONGODB.log" && open "sample-shard-00-02_2026-04-18T12_37_07_2026-04-18T16_37_07_MONGODB_report.html"
 ```
 
 Expected: HTML report opens in browser with all sections populated and interactive Plotly.js charts.

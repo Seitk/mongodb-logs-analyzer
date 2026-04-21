@@ -58,10 +58,10 @@ Each line is a JSON object following the Relaxed Extended JSON v2.0 spec:
 ```json
 {
   "type": "command",
-  "ns": "isi.applereceipts",
-  "command": { "find": "applereceipts", "filter": { "transactionId": "..." }, ... },
+  "ns": "myapp.orders",
+  "command": { "find": "orders", "filter": { "orderId": "..." }, ... },
   "durationMillis": 120,
-  "planSummary": "IXSCAN { transactionId: 1 }",
+  "planSummary": "IXSCAN { orderId: 1 }",
   "keysExamined": 1,
   "docsExamined": 1,
   "nreturned": 1,
@@ -79,7 +79,7 @@ Each line is a JSON object following the Relaxed Extended JSON v2.0 spec:
     "execution": { "admissions": 2, "totalTimeQueuedMicros": 0 }
   },
   "appName": "...",
-  "remote": "10.7.12.254:53779"
+  "remote": "10.0.0.5:53779"
 }
 ```
 
@@ -360,7 +360,7 @@ mongodb-logs-analyzer/
 ## Testing Strategy
 
 - **Unit tests** per analyzer module with crafted JSON log lines
-- **Integration test** against the real log file: `gn-shop-prod-shard-00-02.pumxn.mongodb.net_2026-04-18T12_37_07_2026-04-18T16_37_07_MONGODB.log` (957K lines, 348MB)
+- **Integration test** against the real log file: `sample-shard-00-02_2026-04-18T12_37_07_2026-04-18T16_37_07_MONGODB.log` (957K lines, 348MB)
   - Verify line count matches `wc -l`
   - Verify slow query count matches `grep -c '"Slow query"'` (239)
   - Verify connection accepted count matches `grep -c '"Connection accepted"'`
