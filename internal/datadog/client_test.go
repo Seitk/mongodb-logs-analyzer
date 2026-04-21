@@ -43,7 +43,7 @@ func TestSubmitMetrics(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient("test-api-key", "")
+	c := NewClient("test-api-key", "", "")
 	// Override the site to point to test server
 	c.Site = "unused"
 	// We need to override the submit URL — patch the HTTP client with a custom transport

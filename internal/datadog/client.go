@@ -13,20 +13,27 @@ import (
 
 const defaultSite = "datadoghq.com"
 
+const defaultPrefix = "mongodb"
+
 type Client struct {
 	APIKey string
 	Site   string
+	Prefix string
 	HTTP   *http.Client
-	Host   string // tag value for host, derived from log context
+	Host   string
 }
 
-func NewClient(apiKey, site string) *Client {
+func NewClient(apiKey, site, prefix string) *Client {
 	if site == "" {
 		site = defaultSite
+	}
+	if prefix == "" {
+		prefix = defaultPrefix
 	}
 	return &Client{
 		APIKey: apiKey,
 		Site:   site,
+		Prefix: prefix,
 		HTTP:   &http.Client{Timeout: 30 * time.Second},
 	}
 }
@@ -46,6 +53,10 @@ type metric struct {
 type point struct {
 	Timestamp int64   `json:"timestamp"`
 	Value     float64 `json:"value"`
+}
+
+func (c *Client) m(name string) string {
+	return c.Prefix + "." + name
 }
 
 func (c *Client) SubmitMetrics(results analyzer.Results) error {
@@ -73,14 +84,14 @@ func (c *Client) SubmitMetrics(results analyzer.Results) error {
 		}
 
 		metrics = append(metrics,
-			gauge("mongodb.slow_query.count", float64(g.Count), ts, tags),
-			gauge("mongodb.slow_query.duration.avg", float64(g.MeanMs), ts, tags),
-			gauge("mongodb.slow_query.duration.p95", float64(g.P95Ms), ts, tags),
-			gauge("mongodb.slow_query.duration.max", float64(g.MaxMs), ts, tags),
-			gauge("mongodb.slow_query.duration.sum", float64(g.SumMs), ts, tags),
-			gauge("mongodb.slow_query.cpu_nanos.avg", float64(g.MeanCPUNanos), ts, tags),
-			gauge("mongodb.slow_query.write_concern_wait.avg", float64(g.MeanWriteConcernMs), ts, tags),
-			gauge("mongodb.slow_query.storage_wait.avg", float64(g.MeanStorageWaitUs), ts, tags),
+			gauge(c.m("slow_query.count"), float64(g.Count), ts, tags),
+			gauge(c.m("slow_query.duration.avg"), float64(g.MeanMs), ts, tags),
+			gauge(c.m("slow_query.duration.p95"), float64(g.P95Ms), ts, tags),
+			gauge(c.m("slow_query.duration.max"), float64(g.MaxMs), ts, tags),
+			gauge(c.m("slow_query.duration.sum"), float64(g.SumMs), ts, tags),
+			gauge(c.m("slow_query.cpu_nanos.avg"), float64(g.MeanCPUNanos), ts, tags),
+			gauge(c.m("slow_query.write_concern_wait.avg"), float64(g.MeanWriteConcernMs), ts, tags),
+			gauge(c.m("slow_query.storage_wait.avg"), float64(g.MeanStorageWaitUs), ts, tags),
 		)
 	}
 
@@ -92,44 +103,44 @@ func (c *Client) SubmitMetrics(results analyzer.Results) error {
 	for ns, count := range scansByNS {
 		db, coll := splitNamespace(ns)
 		tags := []string{"namespace:" + ns, "db:" + db, "collection:" + coll, "host:" + host}
-		metrics = append(metrics, gauge("mongodb.table_scan.count", float64(count), ts, tags))
+		metrics = append(metrics, gauge(c.m("table_scan.count"), float64(count), ts, tags))
 	}
 
 	// Connection metrics
 	connTags := []string{"host:" + host}
 	metrics = append(metrics,
-		gauge("mongodb.connections.opened", float64(results.Connections.TotalOpened), ts, connTags),
-		gauge("mongodb.connections.closed", float64(results.Connections.TotalClosed), ts, connTags),
-		gauge("mongodb.connections.peak", float64(results.Connections.PeakConnections), ts, connTags),
+		gauge(c.m("connections.opened"), float64(results.Connections.TotalOpened), ts, connTags),
+		gauge(c.m("connections.closed"), float64(results.Connections.TotalClosed), ts, connTags),
+		gauge(c.m("connections.peak"), float64(results.Connections.PeakConnections), ts, connTags),
 	)
 	if results.Connections.TLS.Count > 0 {
 		metrics = append(metrics,
-			gauge("mongodb.connections.tls_handshake.p95", float64(results.Connections.TLS.P95Ms), ts, connTags),
+			gauge(c.m("connections.tls_handshake.p95"), float64(results.Connections.TLS.P95Ms), ts, connTags),
 		)
 	}
 
 	// Log line metrics by severity
 	for sev, count := range results.General.SeverityCounts {
 		tags := []string{"host:" + host, "severity:" + sev}
-		metrics = append(metrics, gauge("mongodb.log.lines", float64(count), ts, tags))
+		metrics = append(metrics, gauge(c.m("log.lines"), float64(count), ts, tags))
 	}
 
 	// Log line metrics by component
 	for comp, count := range results.General.ComponentCounts {
 		tags := []string{"host:" + host, "component:" + comp}
-		metrics = append(metrics, gauge("mongodb.log.lines_by_component", float64(count), ts, tags))
+		metrics = append(metrics, gauge(c.m("log.lines_by_component"), float64(count), ts, tags))
 	}
 
 	// Error metrics
 	for _, g := range results.Errors.Groups {
 		tags := []string{"host:" + host, "severity:" + g.Severity, "component:" + g.Component, "message:" + g.Message}
-		metrics = append(metrics, gauge("mongodb.log.errors", float64(g.Count), ts, tags))
+		metrics = append(metrics, gauge(c.m("log.errors"), float64(g.Count), ts, tags))
 	}
 
 	// Client metrics
 	for _, g := range results.Clients.Groups {
 		tags := []string{"host:" + host, "driver:" + g.DriverName, "driver_version:" + g.DriverVersion, "app_name:" + g.AppName}
-		metrics = append(metrics, gauge("mongodb.client.connections", float64(g.Count), ts, tags))
+		metrics = append(metrics, gauge(c.m("client.connections"), float64(g.Count), ts, tags))
 	}
 
 	// Storage metrics
@@ -137,9 +148,9 @@ func (c *Client) SubmitMetrics(results analyzer.Results) error {
 		db, coll := splitNamespace(s.Namespace)
 		tags := []string{"namespace:" + s.Namespace, "db:" + db, "collection:" + coll, "host:" + host}
 		metrics = append(metrics,
-			gauge("mongodb.storage.bytes_read", float64(s.TotalBytesRead), ts, tags),
-			gauge("mongodb.storage.bytes_written", float64(s.TotalBytesWritten), ts, tags),
-			gauge("mongodb.storage.read_time_us", float64(s.TotalTimeReadUs), ts, tags),
+			gauge(c.m("storage.bytes_read"), float64(s.TotalBytesRead), ts, tags),
+			gauge(c.m("storage.bytes_written"), float64(s.TotalBytesWritten), ts, tags),
+			gauge(c.m("storage.read_time_us"), float64(s.TotalTimeReadUs), ts, tags),
 		)
 	}
 
@@ -159,8 +170,8 @@ func (c *Client) SubmitMetrics(results analyzer.Results) error {
 			avg /= float64(len(durations))
 		}
 		metrics = append(metrics,
-			gauge("mongodb.transactions.count", float64(len(durations)), ts, tags),
-			gauge("mongodb.transactions.duration.avg", avg, ts, tags),
+			gauge(c.m("transactions.count"), float64(len(durations)), ts, tags),
+			gauge(c.m("transactions.duration.avg"), avg, ts, tags),
 		)
 	}
 

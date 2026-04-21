@@ -33,6 +33,7 @@ func runAnalyze() {
 	ddFlag := flag.Bool("datadog", false, "Send metrics to Datadog (requires DD_API_KEY)")
 	ddAPIKey := flag.String("dd-api-key", "", "Datadog API key (or set DD_API_KEY)")
 	ddSite := flag.String("dd-site", "", "Datadog site (or set DD_SITE, default: datadoghq.com)")
+	ddPrefix := flag.String("dd-prefix", "", "Datadog metric prefix (default: mongodb)")
 
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: mla [flags] <logfile>\n       mla download [flags]\n\nAnalyze MongoDB log files and generate reports.\n\nFlags:\n")
@@ -90,7 +91,7 @@ func runAnalyze() {
 			os.Exit(1)
 		}
 
-		ddClient := datadog.NewClient(apiKey, site)
+		ddClient := datadog.NewClient(apiKey, site, *ddPrefix)
 		fmt.Fprintf(os.Stderr, "Sending metrics to Datadog (%s)...\n", ddClient.Site)
 		if err := ddClient.SubmitMetrics(results); err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: Datadog submission failed: %v\n", err)
