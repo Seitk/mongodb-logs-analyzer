@@ -10,6 +10,7 @@ import (
 
 	"github.com/Seitk/mongodb-logs-analyzer/internal/analyzer"
 	"github.com/Seitk/mongodb-logs-analyzer/internal/atlas"
+	"github.com/Seitk/mongodb-logs-analyzer/internal/datadog"
 	"github.com/Seitk/mongodb-logs-analyzer/internal/report"
 )
 
@@ -29,6 +30,9 @@ func runAnalyze() {
 	repoPath := flag.String("repo", "", "Repository path for code context in AI analysis")
 	aiCmd := flag.String("ai-cmd", "claude -p", "AI command to execute")
 	slowMS := flag.Int("slow", 100, "Slow query threshold in milliseconds")
+	ddFlag := flag.Bool("datadog", false, "Send metrics to Datadog (requires DD_API_KEY)")
+	ddAPIKey := flag.String("dd-api-key", "", "Datadog API key (or set DD_API_KEY)")
+	ddSite := flag.String("dd-site", "", "Datadog site (or set DD_SITE, default: datadoghq.com)")
 
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: mla [flags] <logfile>\n       mla download [flags]\n\nAnalyze MongoDB log files and generate reports.\n\nFlags:\n")
@@ -70,6 +74,30 @@ func runAnalyze() {
 	}
 
 	fmt.Fprintf(os.Stderr, "Analysis complete: %d lines processed\n", results.General.TotalLines)
+
+	// Send metrics to Datadog if requested
+	if *ddFlag {
+		apiKey := *ddAPIKey
+		if apiKey == "" {
+			apiKey = os.Getenv("DD_API_KEY")
+		}
+		site := *ddSite
+		if site == "" {
+			site = os.Getenv("DD_SITE")
+		}
+		if apiKey == "" {
+			fmt.Fprintf(os.Stderr, "Error: -datadog requires DD_API_KEY env var or -dd-api-key flag\n")
+			os.Exit(1)
+		}
+
+		ddClient := datadog.NewClient(apiKey, site)
+		fmt.Fprintf(os.Stderr, "Sending metrics to Datadog (%s)...\n", ddClient.Site)
+		if err := ddClient.SubmitMetrics(results); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: Datadog submission failed: %v\n", err)
+		} else {
+			fmt.Fprintf(os.Stderr, "Metrics sent to Datadog\n")
+		}
+	}
 
 	switch *format {
 	case "json":
