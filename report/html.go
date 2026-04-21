@@ -22,12 +22,13 @@ type htmlData struct {
 	SlowQueryCount   int
 	ErrorCount       int
 	TopIPs           []analyzer.IPStats
-	TimelineJSON     template.JS
-	ScatterJSON      template.JS
-	BreakdownJSON    template.JS
-	ConnTimelineJSON template.JS
-	AIAnalysis       template.HTML
-	PlotlyJS         template.JS
+	TimelineJSON        template.JS
+	ScatterJSON         template.JS
+	ScatterDetailsJSON  template.JS
+	BreakdownJSON       template.JS
+	ConnTimelineJSON    template.JS
+	AIAnalysis          template.HTML
+	PlotlyJS            template.JS
 }
 
 // WriteHTML renders the analysis results as an HTML report.
@@ -85,9 +86,10 @@ func buildHTMLData(results analyzer.Results, aiAnalysis string) htmlData {
 		SlowQueryCount:   slowQueryCount,
 		ErrorCount:       errorCount,
 		TopIPs:           topIPs,
-		TimelineJSON:     template.JS(buildTimelineJSON(results)),
-		ScatterJSON:      template.JS(buildScatterJSON(results)),
-		BreakdownJSON:    template.JS(buildBreakdownJSON(results)),
+		TimelineJSON:        template.JS(buildTimelineJSON(results)),
+		ScatterJSON:         template.JS(buildScatterJSON(results)),
+		ScatterDetailsJSON:  template.JS(buildScatterDetailsJSON(results)),
+		BreakdownJSON:       template.JS(buildBreakdownJSON(results)),
 		ConnTimelineJSON: template.JS(buildConnTimelineJSON(results)),
 		AIAnalysis:       template.HTML(aiAnalysis),
 	}
@@ -164,6 +166,45 @@ func buildScatterJSON(results analyzer.Results) string {
 
 	data := []interface{}{trace}
 	b, _ := json.Marshal(data)
+	return string(b)
+}
+
+// buildScatterDetailsJSON builds per-point detail data for the scatter chart click modal.
+func buildScatterDetailsJSON(results analyzer.Results) string {
+	if len(results.SlowQueries.Groups) == 0 {
+		return "[]"
+	}
+
+	type detail struct {
+		Namespace    string                 `json:"namespace"`
+		CmdName      string                 `json:"cmdName"`
+		Pattern      string                 `json:"pattern"`
+		Count        int                    `json:"count"`
+		MinMs        int                    `json:"minMs"`
+		MaxMs        int                    `json:"maxMs"`
+		MeanMs       int                    `json:"meanMs"`
+		P95Ms        int                    `json:"p95Ms"`
+		SumMs        int                    `json:"sumMs"`
+		SampleCmd    map[string]interface{} `json:"sampleCmd"`
+	}
+
+	details := make([]detail, len(results.SlowQueries.Groups))
+	for i, grp := range results.SlowQueries.Groups {
+		details[i] = detail{
+			Namespace: grp.Namespace,
+			CmdName:   grp.CmdName,
+			Pattern:   grp.Pattern,
+			Count:     grp.Count,
+			MinMs:     grp.MinMs,
+			MaxMs:     grp.MaxMs,
+			MeanMs:    grp.MeanMs,
+			P95Ms:     grp.P95Ms,
+			SumMs:     grp.SumMs,
+			SampleCmd: grp.SampleCommand,
+		}
+	}
+
+	b, _ := json.Marshal(details)
 	return string(b)
 }
 
