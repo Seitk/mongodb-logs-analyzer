@@ -104,6 +104,31 @@ tr:hover { background: rgba(88, 166, 255, 0.04); }
 .modal-code { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.85em; line-height: 1.5; overflow-x: auto; white-space: pre-wrap; word-break: break-all; color: var(--text); max-height: 40vh; }
 .clickable-row { cursor: pointer; }
 .clickable-row:hover { background: rgba(88,166,255,0.08); }
+
+/* AI Section */
+.ai-section { border: 1px solid var(--accent); border-radius: 8px; overflow: hidden; }
+.ai-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 20px; cursor: pointer; background: rgba(88,166,255,0.05); user-select: none; }
+.ai-header:hover { background: rgba(88,166,255,0.1); }
+.ai-header h2 { margin: 0; border: none; padding: 0; display: flex; align-items: center; gap: 8px; }
+.ai-toggle-icon { font-size: 0.7em; transition: transform 0.2s; display: inline-block; }
+.ai-toggle-icon.open { transform: rotate(90deg); }
+.ai-badge { font-size: 0.75em; padding: 3px 10px; border-radius: 12px; background: var(--accent); color: #0d1117; font-weight: 600; }
+.ai-body { padding: 0 20px 20px; }
+.ai-content h3 { color: var(--accent); margin: 20px 0 8px; font-size: 1.05em; }
+.ai-content h3:first-child { margin-top: 12px; }
+.ai-content h4 { margin: 0 0 8px; font-size: 1em; }
+.ai-content p { margin: 6px 0; line-height: 1.6; }
+.ai-content ul { margin: 8px 0; padding-left: 20px; }
+.ai-content li { margin: 4px 0; line-height: 1.6; }
+.ai-content code { background: var(--bg); padding: 2px 6px; border-radius: 4px; font-size: 0.9em; color: var(--accent); }
+.ai-issue { border-left: 3px solid var(--border); border-radius: 4px; padding: 12px 16px; margin: 12px 0; background: rgba(255,255,255,0.02); }
+.ai-issue h4 { font-size: 1em; }
+.ai-severity-high { border-left-color: var(--accent-red); background: rgba(248,81,73,0.05); }
+.ai-severity-high h4 { color: var(--accent-red); }
+.ai-severity-medium { border-left-color: var(--accent-yellow); background: rgba(210,153,34,0.05); }
+.ai-severity-medium h4 { color: var(--accent-yellow); }
+.ai-severity-low { border-left-color: var(--accent-green); background: rgba(63,185,80,0.05); }
+.ai-severity-low h4 { color: var(--accent-green); }
 </style>
 </head>
 <body>
@@ -156,11 +181,19 @@ tr:hover { background: rgba(88, 166, 255, 0.04); }
   </div>
 </div>
 
-<!-- AI Analysis (right under Executive Summary) -->
+<!-- AI Analysis (right under Executive Summary, collapsible, default collapsed) -->
 {{if .AIAnalysis}}
-<div class="section">
-  <h2>AI Analysis &amp; Recommendations</h2>
-  <div class="ai-content">{{.AIAnalysis}}</div>
+<div class="section ai-section">
+  <div class="ai-header" onclick="toggleAI()">
+    <h2>
+      <span class="ai-toggle-icon" id="ai-toggle-icon">&#9654;</span>
+      AI Analysis &amp; Recommendations
+    </h2>
+    <span class="ai-badge">AI-generated</span>
+  </div>
+  <div class="ai-body" id="ai-body" style="display:none;">
+    <div class="ai-content">{{.AIAnalysis}}</div>
+  </div>
 </div>
 {{end}}
 
@@ -549,6 +582,19 @@ tr:hover { background: rgba(88, 166, 255, 0.04); }
 <script>
 // Query detail data (shared between scatter and breakdown click handlers)
 var scatterDetails = {{.ScatterDetailsJSON}};
+
+// AI section toggle
+function toggleAI() {
+  var body = document.getElementById('ai-body');
+  var icon = document.getElementById('ai-toggle-icon');
+  if (body.style.display === 'none') {
+    body.style.display = 'block';
+    icon.classList.add('open');
+  } else {
+    body.style.display = 'none';
+    icon.classList.remove('open');
+  }
+}
 
 // Theme toggle
 function toggleTheme() {

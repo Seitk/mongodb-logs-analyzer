@@ -29,13 +29,33 @@ func RunAISynthesis(results analyzer.Results, aiCmd string, repoPath string) (st
 
 	// Build the prompt
 	var prompt strings.Builder
-	prompt.WriteString("You are a MongoDB performance expert. Analyze these MongoDB log analysis results and provide:\n")
-	prompt.WriteString("1. An executive summary of the database health\n")
-	prompt.WriteString("2. The top 3-5 most critical performance issues found\n")
-	prompt.WriteString("3. Specific, actionable recommendations for each issue\n")
-	prompt.WriteString("4. Any patterns that suggest systemic problems\n\n")
-	prompt.WriteString("Format your response in HTML using <h3>, <p>, <ul>, <li>, and <strong> tags.\n")
-	prompt.WriteString("Do NOT use markdown. Use semantic HTML only.\n\n")
+	prompt.WriteString(`You are a MongoDB performance expert analyzing production log data. Provide a structured analysis using ONLY these HTML elements: <h3>, <p>, <ul>, <li>, <strong>, <code>, <span>. Do NOT use markdown.
+
+Structure your response in exactly these sections:
+
+<h3>Health Summary</h3>
+<p>3-5 sentence overview of database health. Be specific with numbers.</p>
+
+<h3>Critical Issues</h3>
+For each issue (top 3-5), use this exact format:
+<div class="ai-issue ai-severity-high">
+  <h4>Issue Title</h4>
+  <p><strong>Impact:</strong> One sentence on what this means for production.</p>
+  <p><strong>Evidence:</strong> Specific metrics from the data (durations, counts, ratios).</p>
+  <p><strong>Fix:</strong> Exact command or code change. Use <code> tags for commands.</p>
+</div>
+
+Use class "ai-severity-high" for critical, "ai-severity-medium" for moderate, "ai-severity-low" for minor.
+
+<h3>Quick Wins</h3>
+<ul><li>Actions that can be done in under 1 hour, with specific commands.</li></ul>
+
+<h3>Longer-Term Improvements</h3>
+<ul><li>Architecture or design changes that need planning.</li></ul>
+
+Important: Be concise. Use actual numbers from the data. Every recommendation must include a specific command, index creation, or config change — no vague advice.
+
+`)
 	prompt.WriteString("Analysis Results:\n")
 	prompt.Write(resultsJSON)
 
