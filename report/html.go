@@ -7,6 +7,7 @@ import (
 	"html/template"
 	"io"
 	"math"
+	"sort"
 
 	"github.com/anthropics/mla/analyzer"
 )
@@ -18,17 +19,26 @@ var templateFS embed.FS
 type htmlData struct {
 	analyzer.Results
 
-	DurationHours    float64
-	SlowQueryCount   int
-	ErrorCount       int
-	TopIPs           []analyzer.IPStats
-	TimelineJSON        template.JS
-	ScatterJSON         template.JS
-	ScatterDetailsJSON  template.JS
-	BreakdownJSON       template.JS
-	ConnTimelineJSON    template.JS
-	AIAnalysis          template.HTML
-	PlotlyJS            template.JS
+	DurationHours      float64
+	SlowQueryCount     int
+	ErrorCount         int
+	TopIPs             []analyzer.IPStats
+	OpCounts           []OpCount
+	TimelineJSON       template.JS
+	ScatterJSON        template.JS
+	ScatterDetailsJSON template.JS
+	BreakdownJSON      template.JS
+	ConnTimelineJSON   template.JS
+	OpCountsJSON       template.JS
+	AIAnalysis         template.HTML
+	PlotlyJS           template.JS
+}
+
+// OpCount holds the count of slow queries for a specific operation/command type.
+type OpCount struct {
+	Name    string
+	Count   int
+	Percent float64
 }
 
 // WriteHTML renders the analysis results as an HTML report.
@@ -80,18 +90,41 @@ func buildHTMLData(results analyzer.Results, aiAnalysis string) htmlData {
 		topIPs = topIPs[:20]
 	}
 
+	// Aggregate operation counts by command name
+	opMap := make(map[string]int)
+	for _, grp := range results.SlowQueries.Groups {
+		name := grp.CmdName
+		if name == "" {
+			name = "unknown"
+		}
+		opMap[name] += grp.Count
+	}
+	opCounts := make([]OpCount, 0, len(opMap))
+	for name, count := range opMap {
+		pct := 0.0
+		if slowQueryCount > 0 {
+			pct = math.Round(float64(count)/float64(slowQueryCount)*1000) / 10
+		}
+		opCounts = append(opCounts, OpCount{Name: name, Count: count, Percent: pct})
+	}
+	sort.Slice(opCounts, func(i, j int) bool {
+		return opCounts[i].Count > opCounts[j].Count
+	})
+
 	return htmlData{
-		Results:          results,
-		DurationHours:    durationHours,
-		SlowQueryCount:   slowQueryCount,
-		ErrorCount:       errorCount,
-		TopIPs:           topIPs,
-		TimelineJSON:        template.JS(buildTimelineJSON(results)),
-		ScatterJSON:         template.JS(buildScatterJSON(results)),
-		ScatterDetailsJSON:  template.JS(buildScatterDetailsJSON(results)),
-		BreakdownJSON:       template.JS(buildBreakdownJSON(results)),
-		ConnTimelineJSON: template.JS(buildConnTimelineJSON(results)),
-		AIAnalysis:       template.HTML(aiAnalysis),
+		Results:            results,
+		DurationHours:      durationHours,
+		SlowQueryCount:     slowQueryCount,
+		ErrorCount:         errorCount,
+		TopIPs:             topIPs,
+		OpCounts:           opCounts,
+		TimelineJSON:       template.JS(buildTimelineJSON(results)),
+		ScatterJSON:        template.JS(buildScatterJSON(results)),
+		ScatterDetailsJSON: template.JS(buildScatterDetailsJSON(results)),
+		BreakdownJSON:      template.JS(buildBreakdownJSON(results)),
+		ConnTimelineJSON:   template.JS(buildConnTimelineJSON(results)),
+		OpCountsJSON:       template.JS(buildOpCountsJSON(opCounts)),
+		AIAnalysis:         template.HTML(aiAnalysis),
 	}
 }
 
@@ -205,6 +238,42 @@ func buildScatterDetailsJSON(results analyzer.Results) string {
 	}
 
 	b, _ := json.Marshal(details)
+	return string(b)
+}
+
+// buildOpCountsJSON builds Plotly data for the operation counts pie chart.
+func buildOpCountsJSON(opCounts []OpCount) string {
+	if len(opCounts) == 0 {
+		return "[]"
+	}
+
+	labels := make([]string, len(opCounts))
+	values := make([]int, len(opCounts))
+	for i, oc := range opCounts {
+		labels[i] = oc.Name
+		values[i] = oc.Count
+	}
+
+	colors := []string{"#58a6ff", "#3fb950", "#d29922", "#f85149", "#bc8cff", "#f778ba", "#79c0ff", "#56d364", "#e3b341", "#ff7b72"}
+
+	traceColors := make([]string, len(opCounts))
+	for i := range opCounts {
+		traceColors[i] = colors[i%len(colors)]
+	}
+
+	trace := map[string]interface{}{
+		"labels":  labels,
+		"values":  values,
+		"type":    "pie",
+		"hole":    0.4,
+		"textinfo": "label+percent",
+		"textposition": "outside",
+		"marker": map[string]interface{}{
+			"colors": traceColors,
+		},
+	}
+
+	b, _ := json.Marshal([]interface{}{trace})
 	return string(b)
 }
 

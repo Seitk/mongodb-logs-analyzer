@@ -156,6 +156,36 @@ tr:hover { background: rgba(88, 166, 255, 0.04); }
   </div>
 </div>
 
+<!-- Operations by Type -->
+{{if .OpCounts}}
+<div class="section">
+  <h2>Slow Queries by Operation Type</h2>
+  <div class="two-col">
+    <div id="opcounts-chart" class="chart-container"></div>
+    <div class="table-wrap">
+      <table id="opcounts-table">
+        <thead>
+          <tr>
+            <th onclick="sortTable('opcounts-table', 0)">Operation</th>
+            <th onclick="sortTable('opcounts-table', 1)">Count</th>
+            <th>% of Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{range .OpCounts}}
+          <tr>
+            <td><strong>{{.Name}}</strong></td>
+            <td>{{comma .Count}}</td>
+            <td>{{printf "%.1f" .Percent}}%</td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{{end}}
+
 <!-- Operations Timeline -->
 {{if .SlowQueries.Timeline}}
 <div class="section">
@@ -573,6 +603,17 @@ var darkLayout = {
 };
 
 var plotConfig = { responsive: true, displayModeBar: false };
+
+// Operation counts pie chart
+var opCountsEl = document.getElementById('opcounts-chart');
+if (opCountsEl) {
+  var opCountsData = {{.OpCountsJSON}};
+  var opCountsLayout = Object.assign({}, darkLayout, {
+    margin: { l: 20, r: 20, t: 20, b: 20 },
+    showlegend: false
+  });
+  Plotly.newPlot('opcounts-chart', opCountsData, opCountsLayout, plotConfig);
+}
 
 // Timeline chart
 var timelineEl = document.getElementById('timeline-chart');
