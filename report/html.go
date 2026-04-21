@@ -1,0 +1,377 @@
+package report
+
+import (
+	"embed"
+	"encoding/json"
+	"fmt"
+	"html/template"
+	"io"
+	"math"
+
+	"github.com/anthropics/mla/analyzer"
+)
+
+//go:embed template.html
+var templateFS embed.FS
+
+// htmlData wraps analyzer.Results with computed fields for the HTML template.
+type htmlData struct {
+	analyzer.Results
+
+	DurationHours    float64
+	SlowQueryCount   int
+	ErrorCount       int
+	TopIPs           []analyzer.IPStats
+	TimelineJSON     template.JS
+	ScatterJSON      template.JS
+	BreakdownJSON    template.JS
+	ConnTimelineJSON template.JS
+	AIAnalysis       template.HTML
+	PlotlyJS         template.JS
+}
+
+// WriteHTML renders the analysis results as an HTML report.
+func WriteHTML(w io.Writer, results analyzer.Results, aiAnalysis string) error {
+	funcMap := template.FuncMap{
+		"comma":    commaFormat,
+		"truncate": truncate,
+		"bytes":    formatBytes,
+		"divf":     divf,
+	}
+
+	tmplContent, err := templateFS.ReadFile("template.html")
+	if err != nil {
+		return fmt.Errorf("read template: %w", err)
+	}
+
+	tmpl, err := template.New("report").Funcs(funcMap).Parse(string(tmplContent))
+	if err != nil {
+		return fmt.Errorf("parse template: %w", err)
+	}
+
+	data := buildHTMLData(results, aiAnalysis)
+	return tmpl.Execute(w, data)
+}
+
+// buildHTMLData creates the template data structure from results.
+func buildHTMLData(results analyzer.Results, aiAnalysis string) htmlData {
+	// Duration in hours
+	var durationHours float64
+	if !results.General.StartTime.IsZero() && !results.General.EndTime.IsZero() {
+		durationHours = results.General.EndTime.Sub(results.General.StartTime).Hours()
+	}
+
+	// Sum slow query counts
+	var slowQueryCount int
+	for _, grp := range results.SlowQueries.Groups {
+		slowQueryCount += grp.Count
+	}
+
+	// Sum error counts
+	var errorCount int
+	for _, grp := range results.Errors.Groups {
+		errorCount += grp.Count
+	}
+
+	// Cap top IPs at 20
+	topIPs := results.Connections.ByIP
+	if len(topIPs) > 20 {
+		topIPs = topIPs[:20]
+	}
+
+	return htmlData{
+		Results:          results,
+		DurationHours:    durationHours,
+		SlowQueryCount:   slowQueryCount,
+		ErrorCount:       errorCount,
+		TopIPs:           topIPs,
+		TimelineJSON:     template.JS(buildTimelineJSON(results)),
+		ScatterJSON:      template.JS(buildScatterJSON(results)),
+		BreakdownJSON:    template.JS(buildBreakdownJSON(results)),
+		ConnTimelineJSON: template.JS(buildConnTimelineJSON(results)),
+		AIAnalysis:       template.HTML(aiAnalysis),
+	}
+}
+
+// buildTimelineJSON builds Plotly data for the slow query timeline bar chart.
+func buildTimelineJSON(results analyzer.Results) string {
+	if len(results.SlowQueries.Timeline) == 0 {
+		return "[]"
+	}
+
+	x := make([]string, len(results.SlowQueries.Timeline))
+	y := make([]int, len(results.SlowQueries.Timeline))
+
+	for i, bucket := range results.SlowQueries.Timeline {
+		x[i] = bucket.Minute.Format("2006-01-02T15:04:05Z")
+		y[i] = bucket.Count
+	}
+
+	trace := map[string]interface{}{
+		"x":      x,
+		"y":      y,
+		"type":   "bar",
+		"name":   "Slow Queries",
+		"marker": map[string]string{"color": "#58a6ff"},
+	}
+
+	data := []interface{}{trace}
+	b, _ := json.Marshal(data)
+	return string(b)
+}
+
+// buildScatterJSON builds Plotly data for the slow query scatter chart.
+func buildScatterJSON(results analyzer.Results) string {
+	if len(results.SlowQueries.Groups) == 0 {
+		return "[]"
+	}
+
+	x := make([]int, len(results.SlowQueries.Groups))
+	y := make([]int, len(results.SlowQueries.Groups))
+	text := make([]string, len(results.SlowQueries.Groups))
+	sizes := make([]int, len(results.SlowQueries.Groups))
+
+	for i, grp := range results.SlowQueries.Groups {
+		x[i] = grp.Count
+		y[i] = grp.MeanMs
+		text[i] = fmt.Sprintf("%s.%s<br>Count: %d<br>Mean: %dms<br>P95: %dms",
+			grp.Namespace, grp.CmdName, grp.Count, grp.MeanMs, grp.P95Ms)
+		// Size proportional to total time, min 6, max 40
+		sz := int(math.Sqrt(float64(grp.SumMs))) / 2
+		if sz < 6 {
+			sz = 6
+		}
+		if sz > 40 {
+			sz = 40
+		}
+		sizes[i] = sz
+	}
+
+	trace := map[string]interface{}{
+		"x":        x,
+		"y":        y,
+		"text":     text,
+		"type":     "scattergl",
+		"mode":     "markers",
+		"name":     "Query Patterns",
+		"hoverinfo": "text",
+		"marker": map[string]interface{}{
+			"size":    sizes,
+			"color":   "#58a6ff",
+			"opacity": 0.7,
+		},
+	}
+
+	data := []interface{}{trace}
+	b, _ := json.Marshal(data)
+	return string(b)
+}
+
+// buildBreakdownJSON builds Plotly data for the duration breakdown stacked horizontal bar.
+func buildBreakdownJSON(results analyzer.Results) string {
+	groups := results.SlowQueries.Groups
+	if len(groups) == 0 {
+		return "[]"
+	}
+
+	// Cap to top 15 patterns
+	limit := 15
+	if len(groups) < limit {
+		limit = len(groups)
+	}
+	groups = groups[:limit]
+
+	labels := make([]string, limit)
+	cpuMs := make([]float64, limit)
+	writeConcernMs := make([]float64, limit)
+	storageMs := make([]float64, limit)
+	otherMs := make([]float64, limit)
+
+	for i, grp := range groups {
+		label := grp.Namespace
+		if grp.CmdName != "" {
+			label += "." + grp.CmdName
+		}
+		if len(label) > 40 {
+			label = label[:37] + "..."
+		}
+		labels[i] = label
+
+		cpu := float64(grp.MeanCPUNanos) / 1e6
+		wc := float64(grp.MeanWriteConcernMs)
+		stor := float64(grp.MeanStorageWaitUs) / 1e3
+		total := float64(grp.MeanMs)
+
+		accounted := cpu + wc + stor
+		other := total - accounted
+		if other < 0 {
+			other = 0
+		}
+
+		cpuMs[i] = math.Round(cpu*100) / 100
+		writeConcernMs[i] = math.Round(wc*100) / 100
+		storageMs[i] = math.Round(stor*100) / 100
+		otherMs[i] = math.Round(other*100) / 100
+	}
+
+	traces := []interface{}{
+		map[string]interface{}{
+			"y":           labels,
+			"x":           cpuMs,
+			"name":        "CPU",
+			"type":        "bar",
+			"orientation": "h",
+			"marker":      map[string]string{"color": "#58a6ff"},
+		},
+		map[string]interface{}{
+			"y":           labels,
+			"x":           writeConcernMs,
+			"name":        "Write Concern",
+			"type":        "bar",
+			"orientation": "h",
+			"marker":      map[string]string{"color": "#d29922"},
+		},
+		map[string]interface{}{
+			"y":           labels,
+			"x":           storageMs,
+			"name":        "Storage Wait",
+			"type":        "bar",
+			"orientation": "h",
+			"marker":      map[string]string{"color": "#3fb950"},
+		},
+		map[string]interface{}{
+			"y":           labels,
+			"x":           otherMs,
+			"name":        "Other",
+			"type":        "bar",
+			"orientation": "h",
+			"marker":      map[string]string{"color": "#8b949e"},
+		},
+	}
+
+	b, _ := json.Marshal(traces)
+	return string(b)
+}
+
+// buildConnTimelineJSON builds Plotly data for the connection timeline area chart.
+func buildConnTimelineJSON(results analyzer.Results) string {
+	if len(results.Connections.Timeline) == 0 {
+		return "[]"
+	}
+
+	x := make([]string, len(results.Connections.Timeline))
+	yConns := make([]int, len(results.Connections.Timeline))
+	yOpened := make([]int, len(results.Connections.Timeline))
+	yClosed := make([]int, len(results.Connections.Timeline))
+
+	for i, bucket := range results.Connections.Timeline {
+		x[i] = bucket.Minute.Format("2006-01-02T15:04:05Z")
+		yConns[i] = bucket.ConnectionCount
+		yOpened[i] = bucket.Opened
+		yClosed[i] = bucket.Closed
+	}
+
+	traces := []interface{}{
+		map[string]interface{}{
+			"x":    x,
+			"y":    yConns,
+			"type": "scatter",
+			"mode": "lines",
+			"fill": "tozeroy",
+			"name": "Active Connections",
+			"line": map[string]string{"color": "#58a6ff"},
+		},
+		map[string]interface{}{
+			"x":    x,
+			"y":    yOpened,
+			"type": "scatter",
+			"mode": "lines",
+			"name": "Opened / min",
+			"line": map[string]interface{}{"color": "#3fb950", "dash": "dot"},
+		},
+		map[string]interface{}{
+			"x":    x,
+			"y":    yClosed,
+			"type": "scatter",
+			"mode": "lines",
+			"name": "Closed / min",
+			"line": map[string]interface{}{"color": "#f85149", "dash": "dot"},
+		},
+	}
+
+	b, _ := json.Marshal(traces)
+	return string(b)
+}
+
+// commaFormat formats an integer with comma separators.
+// Handles both int and int64.
+func commaFormat(v interface{}) string {
+	var n int64
+	switch val := v.(type) {
+	case int:
+		n = int64(val)
+	case int64:
+		n = val
+	default:
+		return fmt.Sprintf("%v", v)
+	}
+
+	if n < 0 {
+		return "-" + commaFormat(-n)
+	}
+
+	s := fmt.Sprintf("%d", n)
+	if len(s) <= 3 {
+		return s
+	}
+
+	var result []byte
+	remainder := len(s) % 3
+	if remainder > 0 {
+		result = append(result, s[:remainder]...)
+		if len(s) > remainder {
+			result = append(result, ',')
+		}
+	}
+	for i := remainder; i < len(s); i += 3 {
+		result = append(result, s[i:i+3]...)
+		if i+3 < len(s) {
+			result = append(result, ',')
+		}
+	}
+	return string(result)
+}
+
+// truncate shortens a string to maxLen characters, adding "..." if truncated.
+func truncate(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen-3] + "..."
+}
+
+// formatBytes formats a byte count into a human-readable string.
+func formatBytes(b int64) string {
+	if b < 0 {
+		return "0 B"
+	}
+	const unit = 1024
+	if b < unit {
+		return fmt.Sprintf("%d B", b)
+	}
+	div, exp := int64(unit), 0
+	for n := b / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	units := []string{"KB", "MB", "GB", "TB"}
+	return fmt.Sprintf("%.1f %s", float64(b)/float64(div), units[exp])
+}
+
+// divf divides an int64 by a float64, returning a float64 for template use.
+func divf(a int64, b float64) float64 {
+	if b == 0 {
+		return 0
+	}
+	return float64(a) / b
+}

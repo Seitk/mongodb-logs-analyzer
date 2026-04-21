@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MongoDB Log Analysis Report</title>
+{{if .PlotlyJS}}<script>{{.PlotlyJS}}</script>{{else}}<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>{{end}}
+<style>
+:root {
+  --bg: #0d1117;
+  --card: #161b22;
+  --border: #30363d;
+  --text: #e6edf3;
+  --text-muted: #8b949e;
+  --accent: #58a6ff;
+  --accent-green: #3fb950;
+  --accent-red: #f85149;
+  --accent-yellow: #d29922;
+  --accent-orange: #db6d28;
+}
+[data-theme="light"] {
+  --bg: #ffffff;
+  --card: #f6f8fa;
+  --border: #d0d7de;
+  --text: #1f2328;
+  --text-muted: #656d76;
+  --accent: #0969da;
+  --accent-green: #1a7f37;
+  --accent-red: #cf222e;
+  --accent-yellow: #9a6700;
+  --accent-orange: #bc4c00;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+  line-height: 1.6;
+  padding: 20px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+h1 { font-size: 1.8em; margin-bottom: 8px; }
+h2 { font-size: 1.4em; margin-bottom: 12px; color: var(--accent); border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+h3 { font-size: 1.1em; margin-bottom: 8px; }
+.header { text-align: center; padding: 30px 0; }
+.header .meta { color: var(--text-muted); font-size: 0.9em; margin-top: 4px; }
+.section { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 20px; }
+.card { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 16px; text-align: center; }
+.card .value { font-size: 2em; font-weight: bold; color: var(--accent); }
+.card .label { font-size: 0.85em; color: var(--text-muted); margin-top: 4px; }
+.card.warn .value { color: var(--accent-yellow); }
+.card.danger .value { color: var(--accent-red); }
+.card.ok .value { color: var(--accent-green); }
+table { width: 100%; border-collapse: collapse; font-size: 0.88em; }
+th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--border); }
+th { cursor: pointer; user-select: none; background: var(--bg); position: sticky; top: 0; font-weight: 600; }
+th:hover { color: var(--accent); }
+tr:hover { background: rgba(88, 166, 255, 0.04); }
+.table-wrap { max-height: 500px; overflow-y: auto; border: 1px solid var(--border); border-radius: 6px; }
+.tag { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 0.8em; margin: 2px; }
+.tag-error { background: rgba(248, 81, 73, 0.15); color: var(--accent-red); }
+.tag-warn { background: rgba(210, 153, 34, 0.15); color: var(--accent-yellow); }
+.tag-info { background: rgba(88, 166, 255, 0.1); color: var(--accent); }
+.expandable { cursor: pointer; }
+.expandable::before { content: '\25B6'; display: inline-block; margin-right: 6px; transition: transform 0.2s; font-size: 0.7em; }
+.expandable.open::before { transform: rotate(90deg); }
+.expand-content { display: none; padding: 12px; background: var(--bg); border-radius: 4px; margin: 4px 0; white-space: pre-wrap; font-family: monospace; font-size: 0.85em; word-break: break-all; }
+.expand-content.open { display: block; }
+.chart-container { width: 100%; min-height: 350px; }
+.alert-row { background: rgba(248, 81, 73, 0.08) !important; }
+.alert-row td:first-child { border-left: 3px solid var(--accent-red); }
+.theme-toggle {
+  position: fixed; top: 16px; right: 16px; z-index: 1000;
+  background: var(--card); border: 1px solid var(--border); border-radius: 6px;
+  padding: 6px 12px; cursor: pointer; color: var(--text); font-size: 0.85em;
+}
+.theme-toggle:hover { border-color: var(--accent); }
+.empty-state { color: var(--text-muted); font-style: italic; padding: 20px; text-align: center; }
+.ai-content { line-height: 1.7; }
+.ai-content h3 { color: var(--accent); margin-top: 16px; }
+.ai-content ul { margin-left: 20px; margin-bottom: 12px; }
+.ai-content li { margin-bottom: 4px; }
+.ai-content strong { color: var(--accent-yellow); }
+.severity-F, .severity-E { color: var(--accent-red); font-weight: bold; }
+.severity-W { color: var(--accent-yellow); }
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+@media (max-width: 900px) { .two-col { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<button class="theme-toggle" onclick="toggleTheme()">Toggle Theme</button>
+
+<!-- Header -->
+<div class="header">
+  <h1>MongoDB Log Analysis Report</h1>
+  <div class="meta">
+    {{if .General.Host}}Host: <strong>{{.General.Host}}</strong> | {{end}}
+    {{if .General.ReplicaSet}}Replica Set: <strong>{{.General.ReplicaSet}}</strong> | {{end}}
+    {{if .General.Version}}Version: <strong>{{.General.Version}}</strong> | {{end}}
+    {{if .General.StorageEngine}}Engine: <strong>{{.General.StorageEngine}}</strong>{{end}}
+  </div>
+  <div class="meta">
+    {{.General.StartTime.Format "2006-01-02 15:04:05 MST"}} &mdash; {{.General.EndTime.Format "2006-01-02 15:04:05 MST"}}
+    ({{printf "%.1f" .DurationHours}} hours)
+  </div>
+</div>
+
+<!-- Executive Summary -->
+<div class="section">
+  <h2>Executive Summary</h2>
+  <div class="cards">
+    <div class="card">
+      <div class="value">{{comma .General.TotalLines}}</div>
+      <div class="label">Total Log Lines</div>
+    </div>
+    <div class="card {{if gt .SlowQueryCount 100}}danger{{else if gt .SlowQueryCount 10}}warn{{else}}ok{{end}}">
+      <div class="value">{{comma .SlowQueryCount}}</div>
+      <div class="label">Slow Queries</div>
+    </div>
+    <div class="card {{if .TableScans.Scans}}danger{{else}}ok{{end}}">
+      <div class="value">{{len .TableScans.Scans}}</div>
+      <div class="label">Table Scans</div>
+    </div>
+    <div class="card {{if gt .ErrorCount 50}}danger{{else if gt .ErrorCount 0}}warn{{else}}ok{{end}}">
+      <div class="value">{{comma .ErrorCount}}</div>
+      <div class="label">Errors/Warnings</div>
+    </div>
+    <div class="card">
+      <div class="value">{{comma .Connections.PeakConnections}}</div>
+      <div class="label">Peak Connections</div>
+    </div>
+    <div class="card">
+      <div class="value">{{comma .Connections.TotalOpened}}</div>
+      <div class="label">Connections Opened</div>
+    </div>
+  </div>
+</div>
+
+<!-- Operations Timeline -->
+{{if .SlowQueries.Timeline}}
+<div class="section">
+  <h2>Operations Timeline</h2>
+  <div id="timeline-chart" class="chart-container"></div>
+</div>
+{{end}}
+
+<!-- Slow Query Analysis -->
+{{if .SlowQueries.Groups}}
+<div class="section">
+  <h2>Slow Query Analysis ({{comma .SlowQueryCount}} queries in {{len .SlowQueries.Groups}} patterns)</h2>
+  <div class="table-wrap">
+    <table id="slow-query-table">
+      <thead>
+        <tr>
+          <th onclick="sortTable('slow-query-table', 0)">Namespace</th>
+          <th onclick="sortTable('slow-query-table', 1)">Command</th>
+          <th onclick="sortTable('slow-query-table', 2)">Count</th>
+          <th onclick="sortTable('slow-query-table', 3)">Mean (ms)</th>
+          <th onclick="sortTable('slow-query-table', 4)">P95 (ms)</th>
+          <th onclick="sortTable('slow-query-table', 5)">Max (ms)</th>
+          <th onclick="sortTable('slow-query-table', 6)">Total (ms)</th>
+          <th>Pattern</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{range .SlowQueries.Groups}}
+        <tr>
+          <td>{{.Namespace}}</td>
+          <td>{{.CmdName}}{{if .AllowDiskUse}} <span class="tag tag-warn">disk</span>{{end}}</td>
+          <td>{{comma .Count}}</td>
+          <td>{{comma .MeanMs}}</td>
+          <td>{{comma .P95Ms}}</td>
+          <td>{{comma .MaxMs}}</td>
+          <td>{{comma .SumMs}}</td>
+          <td>
+            {{if .Pattern}}
+            <span class="expandable" onclick="toggleRow(this)">{{truncate .Pattern 60}}</span>
+            <div class="expand-content">{{.Pattern}}</div>
+            {{end}}
+          </td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+</div>
+{{end}}
+
+<!-- Slow Query Scatter -->
+{{if .SlowQueries.Groups}}
+<div class="section">
+  <h2>Slow Query Scatter</h2>
+  <div id="scatter-chart" class="chart-container"></div>
+</div>
+{{end}}
+
+<!-- Duration Breakdown -->
+{{if .SlowQueries.Groups}}
+<div class="section">
+  <h2>Duration Breakdown (top patterns)</h2>
+  <div id="breakdown-chart" class="chart-container"></div>
+</div>
+{{end}}
+
+<!-- Table Scan Alerts -->
+{{if .TableScans.Scans}}
+<div class="section">
+  <h2>Table Scan Alerts ({{len .TableScans.Scans}} scans detected)</h2>
+  <div class="table-wrap">
+    <table id="tablescan-table">
+      <thead>
+        <tr>
+          <th onclick="sortTable('tablescan-table', 0)">Timestamp</th>
+          <th onclick="sortTable('tablescan-table', 1)">Namespace</th>
+          <th onclick="sortTable('tablescan-table', 2)">Plan</th>
+          <th onclick="sortTable('tablescan-table', 3)">Docs Examined</th>
+          <th onclick="sortTable('tablescan-table', 4)">Returned</th>
+          <th onclick="sortTable('tablescan-table', 5)">Duration (ms)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{range .TableScans.Scans}}
+        <tr class="alert-row">
+          <td>{{.Timestamp.Format "15:04:05"}}</td>
+          <td>{{.Namespace}}</td>
+          <td><span class="tag tag-error">{{.PlanSummary}}</span></td>
+          <td>{{comma .DocsExamined}}</td>
+          <td>{{comma .NReturned}}</td>
+          <td>{{comma .DurationMs}}</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+</div>
+{{end}}
+
+<!-- Connection Analysis -->
+<div class="section">
+  <h2>Connection Analysis</h2>
+  {{if .Connections.Timeline}}
+  <div id="conn-chart" class="chart-container"></div>
+  {{end}}
+  {{if .TopIPs}}
+  <h3 style="margin-top:16px;">Top Client IPs</h3>
+  <div class="table-wrap" style="max-height:300px;">
+    <table id="ip-table">
+      <thead>
+        <tr>
+          <th onclick="sortTable('ip-table', 0)">IP Address</th>
+          <th onclick="sortTable('ip-table', 1)">Connections</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{range .TopIPs}}
+        <tr>
+          <td>{{.IP}}</td>
+          <td>{{comma .Count}}</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+  {{end}}
+</div>
+
+<!-- Client Summary -->
+{{if .Clients.Groups}}
+<div class="section">
+  <h2>Client Summary</h2>
+  <div class="table-wrap">
+    <table id="client-table">
+      <thead>
+        <tr>
+          <th onclick="sortTable('client-table', 0)">Driver</th>
+          <th onclick="sortTable('client-table', 1)">Version</th>
+          <th onclick="sortTable('client-table', 2)">Application</th>
+          <th onclick="sortTable('client-table', 3)">Connections</th>
+          <th onclick="sortTable('client-table', 4)">Unique IPs</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{range .Clients.Groups}}
+        <tr>
+          <td>{{.DriverName}}</td>
+          <td>{{.DriverVersion}}</td>
+          <td>{{.AppName}}</td>
+          <td>{{comma .Count}}</td>
+          <td>{{len .UniqueIPs}}</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+</div>
+{{end}}
+
+<!-- Distinct Log Patterns -->
+{{if .Distinct.Groups}}
+<div class="section">
+  <h2>Distinct Log Patterns ({{len .Distinct.Groups}} unique messages)</h2>
+  <div class="table-wrap">
+    <table id="distinct-table">
+      <thead>
+        <tr>
+          <th onclick="sortTable('distinct-table', 0)">Message</th>
+          <th onclick="sortTable('distinct-table', 1)">Count</th>
+          <th onclick="sortTable('distinct-table', 2)">First Seen</th>
+          <th onclick="sortTable('distinct-table', 3)">Last Seen</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{range .Distinct.Groups}}
+        <tr>
+          <td>
+            <span class="expandable" onclick="toggleRow(this)">{{truncate .Message 80}}</span>
+            <div class="expand-content">{{.Message}}</div>
+          </td>
+          <td>{{comma .Count}}</td>
+          <td>{{.FirstSeen.Format "15:04:05"}}</td>
+          <td>{{.LastSeen.Format "15:04:05"}}</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+</div>
+{{end}}
+
+<!-- Replica Set State -->
+{{if .RSState.Events}}
+<div class="section">
+  <h2>Replica Set State Changes</h2>
+  <div class="table-wrap">
+    <table id="rs-table">
+      <thead>
+        <tr>
+          <th>Timestamp</th>
+          <th>Event</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{range .RSState.Events}}
+        <tr>
+          <td>{{.Timestamp.Format "2006-01-02 15:04:05"}}</td>
+          <td>{{.Message}}</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+</div>
+{{end}}
+
+<!-- Storage Stats -->
+{{if .Storage.Namespaces}}
+<div class="section">
+  <h2>Storage I/O by Namespace</h2>
+  <div class="table-wrap">
+    <table id="storage-table">
+      <thead>
+        <tr>
+          <th onclick="sortTable('storage-table', 0)">Namespace</th>
+          <th onclick="sortTable('storage-table', 1)">Ops</th>
+          <th onclick="sortTable('storage-table', 2)">Bytes Read</th>
+          <th onclick="sortTable('storage-table', 3)">Bytes Written</th>
+          <th onclick="sortTable('storage-table', 4)">Read Time (ms)</th>
+          <th onclick="sortTable('storage-table', 5)">Write Time (ms)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{range .Storage.Namespaces}}
+        <tr>
+          <td>{{.Namespace}}</td>
+          <td>{{comma .OpCount}}</td>
+          <td>{{bytes .TotalBytesRead}}</td>
+          <td>{{bytes .TotalBytesWritten}}</td>
+          <td>{{printf "%.1f" (divf .TotalTimeReadUs 1000)}}</td>
+          <td>{{printf "%.1f" (divf .TotalTimeWriteUs 1000)}}</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+</div>
+{{end}}
+
+<!-- Transactions -->
+{{if .Transactions.Transactions}}
+<div class="section">
+  <h2>Transactions ({{len .Transactions.Transactions}})</h2>
+  <div class="table-wrap">
+    <table id="txn-table">
+      <thead>
+        <tr>
+          <th onclick="sortTable('txn-table', 0)">Timestamp</th>
+          <th onclick="sortTable('txn-table', 1)">Namespace</th>
+          <th onclick="sortTable('txn-table', 2)">Txn #</th>
+          <th onclick="sortTable('txn-table', 3)">Duration (ms)</th>
+          <th onclick="sortTable('txn-table', 4)">Read Concern</th>
+          <th onclick="sortTable('txn-table', 5)">Termination</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{range .Transactions.Transactions}}
+        <tr>
+          <td>{{.Timestamp.Format "15:04:05"}}</td>
+          <td>{{.Namespace}}</td>
+          <td>{{.TxnNumber}}</td>
+          <td>{{comma .DurationMs}}</td>
+          <td>{{.ReadConcern}}</td>
+          <td>{{if .TerminationCause}}<span class="tag tag-warn">{{.TerminationCause}}</span>{{end}}</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+</div>
+{{end}}
+
+<!-- Errors & Warnings -->
+{{if .Errors.Groups}}
+<div class="section">
+  <h2>Errors &amp; Warnings ({{comma .ErrorCount}} total)</h2>
+  <div class="table-wrap">
+    <table id="error-table">
+      <thead>
+        <tr>
+          <th onclick="sortTable('error-table', 0)">Severity</th>
+          <th onclick="sortTable('error-table', 1)">Component</th>
+          <th onclick="sortTable('error-table', 2)">Message</th>
+          <th onclick="sortTable('error-table', 3)">Count</th>
+          <th onclick="sortTable('error-table', 4)">First Seen</th>
+          <th onclick="sortTable('error-table', 5)">Last Seen</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{range .Errors.Groups}}
+        <tr>
+          <td><span class="severity-{{.Severity}}">{{.Severity}}</span></td>
+          <td>{{.Component}}</td>
+          <td>
+            <span class="expandable" onclick="toggleRow(this)">{{truncate .Message 80}}</span>
+            <div class="expand-content">{{.Message}}</div>
+          </td>
+          <td>{{comma .Count}}</td>
+          <td>{{.FirstSeen.Format "15:04:05"}}</td>
+          <td>{{.LastSeen.Format "15:04:05"}}</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+</div>
+{{end}}
+
+<!-- AI Analysis -->
+{{if .AIAnalysis}}
+<div class="section">
+  <h2>AI Analysis</h2>
+  <div class="ai-content">{{.AIAnalysis}}</div>
+</div>
+{{end}}
+
+<script>
+// Theme toggle
+function toggleTheme() {
+  var html = document.documentElement;
+  var current = html.getAttribute('data-theme');
+  var next = current === 'dark' ? 'light' : 'dark';
+  html.setAttribute('data-theme', next);
+  // Re-layout Plotly charts for new theme
+  var charts = ['timeline-chart', 'scatter-chart', 'breakdown-chart', 'conn-chart'];
+  var bg = next === 'dark' ? '#161b22' : '#f6f8fa';
+  var fg = next === 'dark' ? '#e6edf3' : '#1f2328';
+  var grid = next === 'dark' ? '#30363d' : '#d0d7de';
+  for (var i = 0; i < charts.length; i++) {
+    var el = document.getElementById(charts[i]);
+    if (el && el.data) {
+      Plotly.relayout(el, {
+        'paper_bgcolor': bg, 'plot_bgcolor': bg,
+        'font.color': fg,
+        'xaxis.gridcolor': grid, 'yaxis.gridcolor': grid
+      });
+    }
+  }
+}
+
+// Sortable tables
+function sortTable(tableId, colIdx) {
+  var table = document.getElementById(tableId);
+  if (!table) return;
+  var tbody = table.querySelector('tbody');
+  var rows = Array.from(tbody.querySelectorAll('tr'));
+  var dir = table.getAttribute('data-sort-dir-' + colIdx) === 'asc' ? 'desc' : 'asc';
+  table.setAttribute('data-sort-dir-' + colIdx, dir);
+
+  rows.sort(function(a, b) {
+    var aText = a.cells[colIdx].textContent.trim().replace(/,/g, '');
+    var bText = b.cells[colIdx].textContent.trim().replace(/,/g, '');
+    var aNum = parseFloat(aText);
+    var bNum = parseFloat(bText);
+    if (!isNaN(aNum) && !isNaN(bNum)) {
+      return dir === 'asc' ? aNum - bNum : bNum - aNum;
+    }
+    if (dir === 'asc') return aText.localeCompare(bText);
+    return bText.localeCompare(aText);
+  });
+
+  for (var i = 0; i < rows.length; i++) {
+    tbody.appendChild(rows[i]);
+  }
+}
+
+// Expandable rows
+function toggleRow(el) {
+  el.classList.toggle('open');
+  var content = el.nextElementSibling;
+  if (content && content.classList.contains('expand-content')) {
+    content.classList.toggle('open');
+  }
+}
+
+// Plotly charts
+var darkLayout = {
+  paper_bgcolor: '#161b22',
+  plot_bgcolor: '#161b22',
+  font: { color: '#e6edf3', size: 12 },
+  margin: { l: 60, r: 30, t: 30, b: 50 },
+  xaxis: { gridcolor: '#30363d', zerolinecolor: '#30363d' },
+  yaxis: { gridcolor: '#30363d', zerolinecolor: '#30363d' }
+};
+
+var plotConfig = { responsive: true, displayModeBar: false };
+
+// Timeline chart
+var timelineEl = document.getElementById('timeline-chart');
+if (timelineEl) {
+  var timelineData = {{.TimelineJSON}};
+  var timelineLayout = Object.assign({}, darkLayout, {
+    xaxis: Object.assign({}, darkLayout.xaxis, { title: 'Time' }),
+    yaxis: Object.assign({}, darkLayout.yaxis, { title: 'Slow Queries / min' }),
+    bargap: 0.1
+  });
+  Plotly.newPlot('timeline-chart', timelineData, timelineLayout, plotConfig);
+}
+
+// Scatter chart
+var scatterEl = document.getElementById('scatter-chart');
+if (scatterEl) {
+  var scatterData = {{.ScatterJSON}};
+  var scatterLayout = Object.assign({}, darkLayout, {
+    xaxis: Object.assign({}, darkLayout.xaxis, { title: 'Count', type: 'log' }),
+    yaxis: Object.assign({}, darkLayout.yaxis, { title: 'Mean Duration (ms)', type: 'log' }),
+    hovermode: 'closest'
+  });
+  Plotly.newPlot('scatter-chart', scatterData, scatterLayout, plotConfig);
+}
+
+// Breakdown chart
+var breakdownEl = document.getElementById('breakdown-chart');
+if (breakdownEl) {
+  var breakdownData = {{.BreakdownJSON}};
+  var breakdownLayout = Object.assign({}, darkLayout, {
+    barmode: 'stack',
+    xaxis: Object.assign({}, darkLayout.xaxis, { title: 'Time (ms)' }),
+    yaxis: Object.assign({}, darkLayout.yaxis, { automargin: true }),
+    margin: { l: 200, r: 30, t: 30, b: 50 }
+  });
+  Plotly.newPlot('breakdown-chart', breakdownData, breakdownLayout, plotConfig);
+}
+
+// Connection timeline chart
+var connEl = document.getElementById('conn-chart');
+if (connEl) {
+  var connData = {{.ConnTimelineJSON}};
+  var connLayout = Object.assign({}, darkLayout, {
+    xaxis: Object.assign({}, darkLayout.xaxis, { title: 'Time' }),
+    yaxis: Object.assign({}, darkLayout.yaxis, { title: 'Connections' })
+  });
+  Plotly.newPlot('conn-chart', connData, connLayout, plotConfig);
+}
+
+// Link time axes: zoom on timeline syncs scatter and conn charts
+if (timelineEl) {
+  timelineEl.on('plotly_relayout', function(eventData) {
+    if (!eventData) return;
+    var xRange = {};
+    if (eventData['xaxis.range[0]'] && eventData['xaxis.range[1]']) {
+      xRange = { 'xaxis.range[0]': eventData['xaxis.range[0]'], 'xaxis.range[1]': eventData['xaxis.range[1]'] };
+    } else if (eventData['xaxis.autorange']) {
+      xRange = { 'xaxis.autorange': true };
+    } else {
+      return;
+    }
+    if (scatterEl && scatterEl.data) {
+      // scatter uses count/duration axes, not time - skip time sync
+    }
+    if (connEl && connEl.data) {
+      Plotly.relayout('conn-chart', xRange);
+    }
+  });
+}
+</script>
+
+</body>
+</html>
