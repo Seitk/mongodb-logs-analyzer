@@ -24,6 +24,8 @@ type htmlData struct {
 	ErrorCount         int
 	TopIPs             []analyzer.IPStats
 	OpCounts           []OpCount
+	ComponentChartJSON template.JS
+	MsgTypeChartJSON   template.JS
 	TimelineJSON       template.JS
 	ScatterJSON        template.JS
 	ScatterDetailsJSON template.JS
@@ -118,6 +120,8 @@ func buildHTMLData(results analyzer.Results, aiAnalysis string) htmlData {
 		ErrorCount:         errorCount,
 		TopIPs:             topIPs,
 		OpCounts:           opCounts,
+		ComponentChartJSON: template.JS(buildComponentChartJSON(results)),
+		MsgTypeChartJSON:   template.JS(buildMsgTypeChartJSON(results)),
 		TimelineJSON:       template.JS(buildTimelineJSON(results)),
 		ScatterJSON:        template.JS(buildScatterJSON(results)),
 		ScatterDetailsJSON: template.JS(buildScatterDetailsJSON(results)),
@@ -238,6 +242,77 @@ func buildScatterDetailsJSON(results analyzer.Results) string {
 	}
 
 	b, _ := json.Marshal(details)
+	return string(b)
+}
+
+// buildComponentChartJSON builds a donut chart of all log entries by component.
+func buildComponentChartJSON(results analyzer.Results) string {
+	if len(results.General.ComponentCounts) == 0 {
+		return "[]"
+	}
+
+	type kv struct {
+		k string
+		v int
+	}
+	var items []kv
+	for k, v := range results.General.ComponentCounts {
+		name := k
+		if name == "-" {
+			name = "DEFAULT"
+		}
+		items = append(items, kv{name, v})
+	}
+	sort.Slice(items, func(i, j int) bool { return items[i].v > items[j].v })
+
+	labels := make([]string, len(items))
+	values := make([]int, len(items))
+	for i, item := range items {
+		labels[i] = item.k
+		values[i] = item.v
+	}
+
+	colors := []string{"#58a6ff", "#3fb950", "#d29922", "#f85149", "#bc8cff", "#f778ba", "#79c0ff", "#56d364", "#e3b341", "#ff7b72"}
+	traceColors := make([]string, len(items))
+	for i := range items {
+		traceColors[i] = colors[i%len(colors)]
+	}
+
+	trace := map[string]interface{}{
+		"labels":       labels,
+		"values":       values,
+		"type":         "pie",
+		"hole":         0.4,
+		"textinfo":     "label+percent",
+		"textposition": "outside",
+		"marker":       map[string]interface{}{"colors": traceColors},
+	}
+	b, _ := json.Marshal([]interface{}{trace})
+	return string(b)
+}
+
+// buildMsgTypeChartJSON builds a horizontal bar chart of top message types.
+func buildMsgTypeChartJSON(results analyzer.Results) string {
+	msgs := results.General.TopMessages
+	if len(msgs) == 0 {
+		return "[]"
+	}
+
+	labels := make([]string, len(msgs))
+	values := make([]int, len(msgs))
+	for i, m := range msgs {
+		labels[len(msgs)-1-i] = m.Message
+		values[len(msgs)-1-i] = m.Count
+	}
+
+	trace := map[string]interface{}{
+		"y":           labels,
+		"x":           values,
+		"type":        "bar",
+		"orientation": "h",
+		"marker":      map[string]string{"color": "#58a6ff"},
+	}
+	b, _ := json.Marshal([]interface{}{trace})
 	return string(b)
 }
 
